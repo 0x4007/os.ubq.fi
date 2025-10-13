@@ -10,5 +10,5 @@ coverage.lcov
 .deno/
 
 # Built frontend assets (bundled from src/web/*.ts)
-public/app.js
-public/*.map
+public/assets/
+public/**/*.map

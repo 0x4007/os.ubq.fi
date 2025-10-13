@@ -1,9 +1,6 @@
 {
   "$schema": "https://knip.dev/schema.json",
-  "entry": [
-    "src/server.ts",
-    "src/web/app.ts"
-  ],
+  "entry": ["src/server.ts", "src/web/app.ts"],
   "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
   "ignore": ["**/*.test.ts", "**/*.spec.ts", "tests/**"],
   "ignoreDependencies": [],

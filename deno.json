@@ -1,9 +1,9 @@
 {
   "tasks": {
-    "dev": "sh -c 'deno bundle --watch --platform=browser src/web/app.ts > public/app.js & deno run --watch --allow-net --allow-read=public --allow-env src/server.ts'",
+    "dev": "sh -c 'deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --outfile=public/assets/app.js --watch & deno run --watch --allow-net --allow-read=public --allow-env src/server.ts'",
     "dev:server": "deno run --watch --allow-net --allow-read=public --allow-env src/server.ts",
-    "dev:client": "sh -c 'deno bundle --watch --platform=browser src/web/app.ts > public/app.js'",
-    "build:client": "sh -c 'deno bundle --platform=browser src/web/app.ts > public/app.js'",
+    "dev:client": "deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --outfile=public/assets/app.js --watch",
+    "build:client": "deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --minify --outfile=public/assets/app.js",
     "start": "deno task build:client && deno run --allow-net --allow-read=public --allow-env src/server.ts",
     "test": "deno test -A --coverage=coverage",
     "coverage": "deno coverage coverage --lcov > coverage.lcov",

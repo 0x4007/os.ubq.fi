@@ -70,21 +70,39 @@ Notes: tasks may pin versions (e.g., `npm:prettier@^3`). App code should not use
 
 # Self-Improving Reflection
 
-**Objective:** Offer opportunities to continuously improve `AGENTS.md` based on user interactions and feedback.
+(Reference: `codex resume 0199dcc0-678b-7bc1-a36e-a623a825bcd4`)
 
-**Trigger:** Upon task completion for any task that involved user feedback provided at any point during the conversation, or involved multiple non-trivial steps (e.g., multiple file edits, complex logic generation).
+**Objective:** Encode durable preferences in `AGENTS.md` only when they surface through real corrections, reducing noise while improving future runs.
+
+**Trigger (Stricter):** Invoke this flow only when both are true:
+
+- The agent made a non-trivial incorrect assumption that influenced the work (e.g., chose a tool/approach the user rejected, misinterpreted constraints, or defaulted to a policy the user overrode), and
+- The user explicitly corrected or adjusted the agent’s behavior with an additional input during the task.
+
+Helpful signals (examples, not exhaustive):
+
+- “Don’t use X; use Y instead.”
+- “Avoid JS sources; compile TS only.”
+- “No network calls in tests.”
+- “Prefer library A over B for <reason>.”
+
+Out-of-scope signals (do not trigger):
+
+- Typos, minor style nits, or one-off preferences that are unlikely to generalize.
+- Routine Q&A or clarifications that didn’t correct an earlier assumption.
 
 **Process:**
 
-1. **Offer Reflection:** Ask the user: "Before I complete the task, would you like me to reflect on our interaction and suggest potential improvements to the active `AGENTS.md`?"
-2. **Await User Confirmation:** Proceed to completion immediately if the user declines or doesn't respond affirmatively.
+1. **Offer Addendum Prompt (conditional):** If the stricter trigger is met, ask: “You corrected an earlier assumption I made about <short summary>. Would you like me to draft an addendum to the active `AGENTS.md` to capture this rule for future tasks?”
+2. **Await User Confirmation:** If the user declines or doesn’t affirm, proceed without proposing changes.
 3. **If User Confirms:**
-   a. **Review Interaction:** Synthesize all feedback provided by the user throughout the entire conversation history for the task. Analyze how this feedback relates to the active `AGENTS.md` and identify areas where modified instructions could have improved the outcome or better aligned with user preferences.
-   b. **Identify Active Rules:** List the specific global and workspace `AGENTS.md` files active during the task.
-   c. **Formulate & Propose Improvements:** Generate specific, actionable suggestions for improving the _content_ of the relevant active rule files. Prioritize suggestions directly addressing user feedback. Replace file contents when practical, otherwise describe changes clearly.
-   d. **Await User Action on Suggestions:** Ask the user if they agree with the proposed improvements and if they'd like me to apply them _now_. Apply changes if approved, then proceed to complete the task.
+   a. **Review Interaction:** Summarize the assumption, the user’s correction, and the desired rule.
+   b. **Identify Active Rules:** List the active global and workspace `AGENTS.md` files.
+   c. **Propose Addendum:** Provide concrete edits to the most relevant `AGENTS.md` (project root by default). Prefer a small “Agent Behavior Addendum” subsection with clear, actionable bullets. Keep scope local to this repo unless the user requests updating global defaults.
+   d. **Apply on Approval:** If the user agrees, apply the changes and proceed to task completion.
 
-**Constraint:** Do not offer reflection if:
+**Constraints:**
 
-- No `AGENTS.md` were active.
-- The task was very simple and involved no feedback.
+- Do not offer the addendum prompt unless both stricter trigger conditions are satisfied.
+- Do not propose changes for transient or user-specific preferences without confirmation they should be codified.
+- Skip if no `AGENTS.md` is active.
