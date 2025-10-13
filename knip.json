@@ -1,9 +1,11 @@
 {
-  "$schema": "https://unpkg.com/knip@latest/schema.json",
-  "entry": ["src/**/*.ts", "src/**/*.tsx"],
+  "$schema": "https://knip.dev/schema.json",
+  "entry": [
+    "src/server.ts",
+    "src/web/app.ts"
+  ],
   "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
   "ignore": ["**/*.test.ts", "**/*.spec.ts", "tests/**"],
   "ignoreDependencies": [],
-  "ignoreBinaries": [],
-  "ignoreExports": []
+  "ignoreBinaries": []
 }

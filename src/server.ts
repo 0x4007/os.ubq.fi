@@ -81,7 +81,7 @@ if (import.meta.main) {
       onListen: ({ hostname, port }) => {
         const host = hostname ?? 'localhost';
         console.log(`Server listening on http://${host}:${port}`);
-        console.log(`Serving static files from \"${PUBLIC_DIR}\"`);
+        console.log(`Serving static files from "${PUBLIC_DIR}"`);
       },
     },
     handler,

@@ -1,0 +1,11 @@
+{
+  "name": "os.ubq.fi",
+  "private": true,
+  "type": "module",
+  "description": "Tooling container for ESLint/Knip in a Deno project.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "lint": "echo 'Use deno task lint'",
+    "knip": "echo 'Use deno task knip'"
+  }
+}
