@@ -15,3 +15,4 @@ public/**/*.map
 
 *.log
 *.pid
+.env
