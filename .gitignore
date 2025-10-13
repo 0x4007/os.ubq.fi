@@ -12,3 +12,6 @@ coverage.lcov
 # Built frontend assets (bundled from src/web/*.ts)
 public/assets/
 public/**/*.map
+
+*.log
+*.pid
