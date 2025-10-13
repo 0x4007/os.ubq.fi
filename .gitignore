@@ -1,5 +1,6 @@
 # Build artifacts
 bin/
+coverage/
 
 # macOS
 .DS_Store
@@ -7,3 +8,6 @@ bin/
 # Deno
 .deno/
 
+# Built frontend assets (bundled from src/web/*.ts)
+public/app.js
+public/*.map
