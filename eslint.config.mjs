@@ -4,14 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: [
-      'coverage',
-      'dist',
-      'build',
-      'public',
-      '**/*.d.ts',
-      '**/*.min.*'
-    ]
+    ignores: ['coverage', 'dist', 'build', 'public', '**/*.d.ts', '**/*.min.*'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -21,20 +14,19 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         ecmaVersion: 'latest',
-        sourceType: 'module'
-      }
+        sourceType: 'module',
+      },
     },
     plugins: {
-      '@typescript-eslint': tseslint.plugin
+      '@typescript-eslint': tseslint.plugin,
     },
     rules: {
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      'no-console': 'off'
-    }
-  }
+      'no-console': 'off',
+    },
+  },
 ];
-

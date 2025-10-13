@@ -1,7 +1,7 @@
-import { serveDir } from "@std/http/file-server";
+import { serveDir } from '@std/http/file-server';
 
-const PUBLIC_DIR = Deno.env.get("PUBLIC_DIR") ?? "public";
-const PORT = Number.parseInt(Deno.env.get("PORT") ?? "8000");
+const PUBLIC_DIR = Deno.env.get('PUBLIC_DIR') ?? 'public';
+const PORT = Number.parseInt(Deno.env.get('PORT') ?? '8000');
 
 export async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -9,36 +9,36 @@ export async function handler(req: Request): Promise<Response> {
 
   try {
     // API routes
-    if (pathname.startsWith("/api/")) {
-      if (pathname === "/api/health" && req.method === "GET") {
+    if (pathname.startsWith('/api/')) {
+      if (pathname === '/api/health' && req.method === 'GET') {
         const uptimeMS = Math.floor(performance.now());
         return json({ ok: true, uptimeMS });
       }
 
-      if (pathname === "/api/time" && req.method === "GET") {
+      if (pathname === '/api/time' && req.method === 'GET') {
         const now = new Date();
         return json({ iso: now.toISOString(), epochMS: now.getTime() });
       }
 
-      if (pathname === "/api/echo" && req.method === "POST") {
-        const ct = req.headers.get("content-type") ?? "";
+      if (pathname === '/api/echo' && req.method === 'POST') {
+        const ct = req.headers.get('content-type') ?? '';
         let body: unknown = null;
-        if (ct.includes("application/json")) {
+        if (ct.includes('application/json')) {
           body = await req.json().catch(() => null);
-        } else if (ct.includes("text/plain")) {
+        } else if (ct.includes('text/plain')) {
           body = await req.text().catch(() => null);
-        } else if (ct.includes("application/x-www-form-urlencoded")) {
+        } else if (ct.includes('application/x-www-form-urlencoded')) {
           const form = await req.formData();
           const obj: Record<string, string> = {};
           for (const [k, v] of form.entries()) {
-            if (typeof v === "string") obj[k] = v;
+            if (typeof v === 'string') obj[k] = v;
           }
           body = obj;
-        } else if (ct.includes("multipart/form-data")) {
+        } else if (ct.includes('multipart/form-data')) {
           const form = await req.formData();
           const obj: Record<string, unknown> = {};
           for (const [k, v] of form.entries()) {
-            obj[k] = typeof v === "string" ? v : { name: v.name, size: v.size };
+            obj[k] = typeof v === 'string' ? v : { name: v.name, size: v.size };
           }
           body = obj;
         } else {
@@ -57,21 +57,21 @@ export async function handler(req: Request): Promise<Response> {
       quiet: true,
     });
   } catch (err) {
-    console.error("Request error:", err);
-    return new Response("Internal Server Error", { status: 500 });
+    console.error('Request error:', err);
+    return new Response('Internal Server Error', { status: 500 });
   }
 }
 
 function json(data: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
-  if (!headers.has("content-type")) {
-    headers.set("content-type", "application/json; charset=utf-8");
+  if (!headers.has('content-type')) {
+    headers.set('content-type', 'application/json; charset=utf-8');
   }
   return new Response(JSON.stringify(data), { ...init, headers });
 }
 
 function notFound(): Response {
-  return new Response("Not Found", { status: 404 });
+  return new Response('Not Found', { status: 404 });
 }
 
 if (import.meta.main) {
@@ -79,7 +79,7 @@ if (import.meta.main) {
     {
       port: PORT,
       onListen: ({ hostname, port }) => {
-        const host = hostname ?? "localhost";
+        const host = hostname ?? 'localhost';
         console.log(`Server listening on http://${host}:${port}`);
         console.log(`Serving static files from \"${PUBLIC_DIR}\"`);
       },
