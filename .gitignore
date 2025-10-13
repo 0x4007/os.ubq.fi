@@ -1,6 +1,7 @@
 # Build artifacts
 bin/
 coverage/
+coverage.lcov
 
 # macOS
 .DS_Store
