@@ -33,6 +33,40 @@ The Supabase Explorer provides a compact way to browse tables and see how rows r
   - Heuristics need `*_id` to match a table name (`user_id` → `users`).
 - To get exact relationships, install the `public.db_relations` RPC described in `docs/RELATIONS.md` (no UI change required).
 
+## Saved Views
+
+- Save the current view (table + pagination + filters) using the “Save View” button in the sidebar.
+- Saved views are stored in the browser only via `localStorage`:
+  - Index key `views:index` holds the list of names, and each entry is stored as `views:<name>` → URL string.
+- Apply a saved view by clicking “Apply” next to its name. Removing a view deletes only the local copy.
+
+## Drill-Through Navigation
+
+- Click a related card or inline chip to drill into the target table:
+  - Outbound relations (e.g., a `user_id` chip) open the destination table filtered by `id.eq.<value>`.
+  - Inbound mini-tables open the source table filtered by `<fromColumn>.eq.<currentRowId>`.
+- Navigation updates the URL and browser history, so back/forward works.
+
+## Deep Links
+
+- URL parameters supported:
+  - `table=<name>` — selected table
+  - `limit=<n>` and `offset=<n>` — pagination
+  - `filter=<col>.<op>.<val>` — forwarded to the server as `<col>=<op>.<val>` (basic ops: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `ilike`)
+  - `rowId=<id>` — after load, the row with this primary key is auto-selected
+
+State such as the last selected table and sidebar scroll is also stored locally to reduce setup friction when returning to the app.
+
+## Export & Print
+
+- Export CSV — downloads the current grid slice using the visible columns (primary `id` excluded). Values are safely quoted for Excel/Numbers.
+- Export JSON — downloads `{ columns, rows, meta }` where `meta` includes `table`, `limit`, `offset`, and `total` if known.
+- Print — use the browser’s print dialog; the UI includes a print stylesheet that hides navigation chrome and lays out content as a clean, single-column document with sensible page breaks.
+
+Notes
+- Exports operate purely on the client using already-fetched rows; no extra server work.
+- Filenames include the table name and range for traceability, e.g., `users_001-050.csv`.
+
 ## Notes on Expanders
 
 - Expanding a row makes two API calls (`/api/sb/outbound` and `/api/sb/inbound`) for that row ID.
