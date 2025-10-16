@@ -21,17 +21,12 @@ function byId<T extends HTMLElement>(id: string): T {
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
 }
-
-<<<<<<< HEAD
-=======
 // Global navigation hook type
 declare global {
   interface Window {
     osubq_nav?: (t: string, f: string) => void;
   }
 }
-
->>>>>>> origin/feat/sprints
 // --- URL + localStorage helpers ---
 function parseURLState(): {
   table: string;
@@ -125,13 +120,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Saved Views wiring (sidebar)
   const viewList = document.getElementById('viewList') as HTMLUListElement | null;
   const saveViewBtn = document.getElementById('saveViewBtn') as HTMLButtonElement | null;
-<<<<<<< HEAD
-  const applyFirstViewBtn = document.getElementById(
-    'applyFirstViewBtn',
-  ) as HTMLButtonElement | null;
-=======
   const applyFirstViewBtn = document.getElementById('applyFirstViewBtn') as HTMLButtonElement | null;
->>>>>>> origin/feat/sprints
   if (viewList && saveViewBtn) {
     const VIEWS_INDEX_KEY = 'views:index';
     const keyFor = (name: string) => `views:${name}`;
@@ -334,12 +323,7 @@ function createDashboard(opts: DashboardOpts) {
     renderTableList();
 
     // Pick initial table: URL > localStorage(lastTable)
-<<<<<<< HEAD
-    const pref =
-      state.table || (typeof lsGet('lastTable') === 'string' ? (lsGet('lastTable') as string) : '');
-=======
     const pref = state.table || (typeof lsGet('lastTable') === 'string' ? (lsGet('lastTable') as string) : '');
->>>>>>> origin/feat/sprints
     if (pref && state.tables.includes(pref)) await selectTable(pref);
     // Restore sidebar scroll position
     const st = Number.parseInt(String(lsGet('sidebarScroll') ?? '0'));
@@ -447,13 +431,7 @@ function createDashboard(opts: DashboardOpts) {
       if (rows.length > 0) {
         let idx = 0;
         if (state.rowId) {
-<<<<<<< HEAD
-          const found = rows.findIndex(
-            (r) => String((r as Record<string, unknown>)['id']) === state.rowId,
-          );
-=======
           const found = rows.findIndex((r) => String((r as Record<string, unknown>)['id']) === state.rowId);
->>>>>>> origin/feat/sprints
           if (found >= 0) idx = found;
         }
         state.selectedIndex = idx;
@@ -500,6 +478,29 @@ function createDashboard(opts: DashboardOpts) {
   opts.tableSearch.addEventListener('input', renderTableList);
   opts.tableList.addEventListener('scroll', () => {
     lsSet('sidebarScroll', opts.tableList.scrollTop);
+  });
+
+  // Wire exports (CSV/JSON) from current in-memory slice
+  opts.exportCsvBtn.addEventListener('click', () => {
+    const cols = state.lastCols.filter((c) => c !== 'id');
+    const csv = toCSV(cols, state.lastRows);
+    const range = state.lastRows.length
+      ? `${String(state.offset + 1).padStart(3, '0')}-${String(state.offset + state.lastRows.length).padStart(3, '0')}`
+      : 'empty';
+    const fname = sanitizeFilename(`${state.table || 'data'}_${range}.csv`);
+    downloadText(fname, 'text/csv', csv);
+  });
+  opts.exportJsonBtn.addEventListener('click', () => {
+    const payload = {
+      columns: state.lastCols.filter((c) => c !== 'id'),
+      rows: state.lastRows,
+      meta: { table: state.table, limit: state.limit, offset: state.offset, total: state.total },
+    };
+    const range = state.lastRows.length
+      ? `${String(state.offset + 1).padStart(3, '0')}-${String(state.offset + state.lastRows.length).padStart(3, '0')}`
+      : 'empty';
+    const fname = sanitizeFilename(`${state.table || 'data'}_${range}.json`);
+    downloadText(fname, 'application/json', JSON.stringify(payload, null, 2));
   });
 
   // Wire exports (CSV/JSON) from current in-memory slice
@@ -574,11 +575,7 @@ function createDashboard(opts: DashboardOpts) {
   }
 
   // Expose a tiny hook for cell drill-through without tight coupling
-<<<<<<< HEAD
-  (window as unknown as { osubq_nav?: (t: string, f: string) => void }).osubq_nav = (t, f) => {
-=======
   window.osubq_nav = (t, f) => {
->>>>>>> origin/feat/sprints
     void navigateTo(t, f);
   };
 
@@ -685,24 +682,13 @@ function toCSV(cols: string[], rows: Record<string, unknown>[]): string {
   const esc = (v: unknown): string => {
     let s: string;
     if (v == null) s = '';
-<<<<<<< HEAD
-    else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
-      s = String(v);
-=======
     else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
->>>>>>> origin/feat/sprints
     else s = safeJSONStringify(v);
     if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
   const header = cols.join(',');
-<<<<<<< HEAD
-  const body = rows
-    .map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(','))
-    .join('\n');
-=======
   const body = rows.map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(',')).join('\n');
->>>>>>> origin/feat/sprints
   return body ? header + '\n' + body : header + '\n';
 }
 
@@ -1025,22 +1011,12 @@ async function renderForeignCell(
       const el = e.target as HTMLElement | null;
       if (el && el.closest('a')) return; // don't hijack external links
       e.stopPropagation();
-<<<<<<< HEAD
-      const filter =
-        targetTable === 'users' && column !== 'id'
-          ? `id.eq.${encodeURIComponent(idStr)}`
-          : `id.eq.${encodeURIComponent(idStr)}`;
-      // Use global navigate via a custom event to avoid tight coupling
-      try {
-        ((window as unknown) as { osubq_nav?: (t: string, f: string) => void }).osubq_nav?.(targetTable, filter);
-=======
       const filter = targetTable === 'users' && column !== 'id'
         ? `id.eq.${encodeURIComponent(idStr)}`
         : `id.eq.${encodeURIComponent(idStr)}`;
       // Use global navigate via a custom event to avoid tight coupling
       try {
         window.osubq_nav?.(targetTable, filter);
->>>>>>> origin/feat/sprints
       } catch {
         // ignore if not wired
       }
