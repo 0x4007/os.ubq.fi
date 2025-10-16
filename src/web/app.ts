@@ -38,7 +38,7 @@ window.addEventListener('DOMContentLoaded', () => {
     tableSearch: byId<HTMLInputElement>('tableSearch'),
     tableTitle: byId<HTMLHeadingElement>('tableTitle'),
     tableSubtitle: byId<HTMLDivElement>('tableSubtitle'),
-    filterChips: (document.getElementById('filterChips') as HTMLDivElement | null) ?? undefined,
+    filterChips: document.getElementById('filterChips') as HTMLDivElement | null,
     pageSizeSel: byId<HTMLSelectElement>('pageSize'),
     prevPageBtn: byId<HTMLButtonElement>('prevPage'),
     nextPageBtn: byId<HTMLButtonElement>('nextPage'),
@@ -88,7 +88,7 @@ type DashboardOpts = {
   tableSearch: HTMLInputElement;
   tableTitle: HTMLHeadingElement;
   tableSubtitle: HTMLDivElement;
-  filterChips?: HTMLDivElement;
+  filterChips: HTMLDivElement | null;
   pageSizeSel: HTMLSelectElement;
   prevPageBtn: HTMLButtonElement;
   nextPageBtn: HTMLButtonElement;
