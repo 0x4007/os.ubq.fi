@@ -885,7 +885,7 @@ async function fetchRefRow(table: string, idVal: unknown): Promise<Record<string
 }
 
 async function renderForeignCell(
-  td: HTMLTableCellElement,
+  td: HTMLElement,
   column: string,
   toTable: string | null,
   idVal: unknown,
@@ -1229,7 +1229,7 @@ async function enrichForeignInKV(
     const toTable = relations.get(key) ?? null;
     const valEl = container.querySelector(`.value[data-key="${key}"]`) as HTMLElement | null;
     if (!valEl) continue;
-    await renderForeignCell(valEl as unknown as HTMLTableCellElement, key, toTable, v, fromTable);
+    await renderForeignCell(valEl, key, toTable, v, fromTable);
   }
 }
 
