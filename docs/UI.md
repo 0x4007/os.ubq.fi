@@ -64,6 +64,10 @@ State such as the last selected table and sidebar scroll is also stored locally 
 - Print — use the browser’s print dialog; the UI includes a print stylesheet that hides navigation chrome and lays out content as a clean, single-column document with sensible page breaks.
 
 Notes
+<<<<<<< HEAD
+
+=======
+>>>>>>> origin/feat/sprints
 - Exports operate purely on the client using already-fetched rows; no extra server work.
 - Filenames include the table name and range for traceability, e.g., `users_001-050.csv`.
 
