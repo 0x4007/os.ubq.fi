@@ -1,0 +1,30 @@
+diff a/src/server.ts b/src/server.ts	(rejected hunks)
+@@ -61,7 +61,7 @@ export async function handler(req: Request): Promise<Response> {
+         return json({ tables: list });
+       }
+ 
+-      // Supabase: fetch rows from a table
++      // Supabase: fetch rows from a table (supports basic filters via `filter=<col>.<op>.<val>`)
+       if (pathname === '/api/sb/rows' && req.method === 'GET') {
+         const cfg = readSupabaseConfig();
+         if (!cfg.ok) return json({ error: cfg.error }, { status: 500 });
+@@ -81,6 +81,19 @@ export async function handler(req: Request): Promise<Response> {
+         if (offset > 0) qs.set('offset', String(offset));
+         if (order) qs.set('order', `${order}.${desc ? 'desc' : 'asc'}`);
+ 
++        // Optional filters: allow multiple `filter` params with pattern `<col>.<op>.<val>`
++        // Example: filter=user_id.eq.123 → ...?user_id=eq.123
++        const filters = url.searchParams.getAll('filter');
++        for (const f of filters) {
++          const [col, op, ...rest] = f.split('.');
++          const val = rest.join('.');
++          if (!col || !op || !val) continue;
++          // Basic allowlist of ops; default to eq
++          const allowed = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'ilike', 'like']);
++          const useOp = allowed.has(op) ? op : 'eq';
++          qs.append(col, `${useOp}.${val}`);
++        }
++
+         const target = `${sbUrl}/rest/v1/${encodeURIComponent(table)}?${qs.toString()}`;
+         const res2 = await fetch(target, {
+           headers: {
