@@ -16,3 +16,5 @@ public/**/*.map
 *.log
 *.pid
 .env
+logs/
+docs/sprints/

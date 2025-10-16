@@ -7,33 +7,75 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
-      <h1>os.ubq.fi</h1>
-      <p>Minimal Deno server with a simple UI and API.</p>
+    <main class="layout">
+      <aside class="sidebar">
+        <h2>Tables</h2>
+        <input id="tableSearch" class="input" placeholder="Filter tables..." />
+        <ul id="tableList" class="table-list"></ul>
+      </aside>
 
-      <section>
-        <h2>Health</h2>
-        <button id="checkHealth">Check Health</button>
-        <pre id="healthOut">(click to load)</pre>
+      <section class="content">
+        <header class="content-header">
+          <div>
+            <h1 id="tableTitle">Data Explorer</h1>
+            <div id="tableSubtitle" class="muted">Select a table to begin</div>
+          </div>
+          <div class="toolbar">
+            <label>Page size
+              <select id="pageSize">
+                <option>25</option>
+                <option selected>50</option>
+                <option>100</option>
+              </select>
+            </label>
+            <button id="prevPage">Prev</button>
+            <button id="nextPage">Next</button>
+          </div>
+        </header>
+
+        <div class="table-container">
+          <table class="table" id="sbGrid"></table>
+        </div>
       </section>
 
-      <section>
-        <h2>Time</h2>
-        <button id="getTime">Get Time</button>
-        <pre id="timeOut">(click to load)</pre>
-      </section>
+      <aside class="inspector">
+        <h2 id="inspectorTitle">Object</h2>
+        <div id="objectSummary" class="card muted">(select a row)</div>
+        <div class="rel-sections">
+          <div class="card">
+            <h3>Related</h3>
+            <div id="relatedOutbound"></div>
+          </div>
+          <div class="card">
+            <h3>Referenced By</h3>
+            <div id="relatedInbound"></div>
+          </div>
+        </div>
 
-      <section>
-        <h2>Echo</h2>
-        <form id="echoForm">
-          <label>
-            JSON payload
-            <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
-          </label>
-          <button type="submit">POST /api/echo</button>
-        </form>
-        <pre id="echoOut">(submit to send)</pre>
-      </section>
+        <details class="details" id="diagnostics">
+          <summary>Diagnostics</summary>
+          <div class="diag-grid">
+            <div>
+              <button id="checkHealth">Check Health</button>
+              <pre id="healthOut">(click to load)</pre>
+            </div>
+            <div>
+              <button id="getTime">Get Time</button>
+              <pre id="timeOut">(click to load)</pre>
+            </div>
+            <div>
+              <form id="echoForm">
+                <label>
+                  JSON payload
+                  <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
+                </label>
+                <button type="submit">POST /api/echo</button>
+              </form>
+              <pre id="echoOut">(submit to send)</pre>
+            </div>
+          </div>
+        </details>
+      </aside>
     </main>
 
     <script type="module" defer src="/assets/app.js"></script>

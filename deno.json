@@ -1,10 +1,10 @@
 {
   "tasks": {
-    "dev": "sh -c 'deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --outfile=public/assets/app.js --watch & deno run --watch --allow-net --allow-read=public --allow-env src/server.ts'",
-    "dev:server": "deno run --watch --allow-net --allow-read=public --allow-env src/server.ts",
+    "dev": "sh -c 'deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --outfile=public/assets/app.js --watch & deno run --watch --allow-net --allow-read=public,.env --allow-env src/server.ts'",
+    "dev:server": "deno run --watch --allow-net --allow-read=public,.env --allow-env src/server.ts",
     "dev:client": "deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --outfile=public/assets/app.js --watch",
     "build:client": "deno run -A npm:esbuild src/web/app.ts --bundle --platform=browser --format=esm --target=es2019 --sourcemap=external --minify --outfile=public/assets/app.js",
-    "start": "deno task build:client && deno run --allow-net --allow-read=public --allow-env src/server.ts",
+    "start": "deno task build:client && deno run --allow-net --allow-read=public,.env --allow-env src/server.ts",
     "test": "deno test -A --coverage=coverage",
     "coverage": "deno coverage coverage --lcov > coverage.lcov",
     "fmt": "deno run -A npm:prettier@^3 --write .",
@@ -12,9 +12,9 @@
     "lint": "deno run -A npm:eslint@^9 --ext .ts,.tsx .",
     "lint:fix": "deno run -A npm:eslint@^9 --ext .ts,.tsx . --fix",
     "knip": "deno run -A npm:knip@^5 --files --exports",
-    "build": "deno task build:client && deno compile --allow-net --allow-read=public --allow-env --output bin/os-ubq-fi src/server.ts",
-    "start:daemon": "sh -c 'PORT=${PORT:-8000}; if lsof -i :$PORT -sTCP:LISTEN >/dev/null 2>&1; then PORT=${PORT_FALLBACK:-8001}; fi; mkdir -p logs && deno task build:client && nohup deno run --allow-net --allow-read=public --allow-env src/server.ts > \"logs/ui-$PORT.log\" 2>&1 & echo $! > \"logs/ui-$PORT.pid\" && sleep 0.8 && curl -fsS \"http://localhost:$PORT/api/health\" >/dev/null && echo \"UI: http://localhost:$PORT (PID $(cat logs/ui-$PORT.pid))\"'",
-    "dev:daemon": "sh -c 'mkdir -p logs && nohup deno task dev > logs/dev.log 2>&1 & echo $! > logs/dev.pid && sleep 0.8 && echo \"Dev watch PID $(cat logs/dev.pid). Logs: logs/dev.log\"'",
+    "build": "deno task build:client && deno compile --allow-net --allow-read=public,.env --allow-env --output bin/os-ubq-fi src/server.ts",
+    "start:daemon": "sh -c 'PORT=${PORT:-8000}; if lsof -i :$PORT -sTCP:LISTEN >/dev/null 2>&1; then PORT=${PORT_FALLBACK:-8001}; fi; mkdir -p logs && deno task build:client && nohup deno run --allow-net --allow-read=public,.env --allow-env src/server.ts > \"logs/ui-$PORT.log\" 2>&1 & echo $! > \"logs/ui-$PORT.pid\" && sleep 0.8 && curl -fsS \"http://localhost:$PORT/api/health\" >/dev/null && echo \"UI: http://localhost:$PORT (PID $(cat logs/ui-$PORT.pid))\"'",
+    "dev:daemon": "sh -c 'PORT=${PORT:-8000}; if lsof -i :$PORT -sTCP:LISTEN >/dev/null 2>&1; then PORT=${PORT_FALLBACK:-8001}; fi; mkdir -p logs && nohup env PORT=$PORT deno task dev > logs/dev.log 2>&1 & echo $! > logs/dev.pid && sleep 0.8 && echo \"Dev watch: http://localhost:$PORT  PID $(cat logs/dev.pid). Logs: logs/dev.log\" && curl -fsS \"http://localhost:$PORT/api/health\" >/dev/null || echo \"(health check not ready yet)\"'",
     "stop:daemon": "sh -c 'PORT=${PORT:-8000}; PID_FILE=\"logs/ui-$PORT.pid\"; if [ ! -f \"$PID_FILE\" ]; then echo \"No PID file $PID_FILE\"; exit 0; fi; PID=$(cat \"$PID_FILE\"); if kill -0 \"$PID\" 2>/dev/null; then kill \"$PID\" && echo \"Stopped UI (PID $PID)\"; else echo \"Process $PID not running\"; fi; rm -f \"$PID_FILE\"'",
     "stop:dev": "sh -c 'PID_FILE=logs/dev.pid; if [ ! -f \"$PID_FILE\" ]; then echo \"No dev PID file\"; exit 0; fi; PID=$(cat \"$PID_FILE\"); if kill -0 \"$PID\" 2>/dev/null; then kill \"$PID\" && echo \"Stopped dev (PID $PID)\"; else echo \"Dev process $PID not running\"; fi; rm -f \"$PID_FILE\"'"
   },
@@ -28,6 +28,7 @@
     "@/": "./src/",
     "@eslint/js": "npm:@eslint/js@^9.37.0",
     "@std/http/file-server": "jsr:@std/http@^1/file-server",
+    "@std/dotenv": "jsr:@std/dotenv",
     "@std/assert": "jsr:@std/assert@^1",
     "typescript-eslint": "npm:typescript-eslint@^8.46.0"
   }
