@@ -18,3 +18,4 @@ public/**/*.map
 .env
 logs/
 docs/sprints/
+screenshots/
