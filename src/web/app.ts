@@ -23,6 +23,13 @@ function byId<T extends HTMLElement>(id: string): T {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // Apply saved theme preference early
+  try {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch {
+    // ignore
+  }
   // Diagnostics
   const healthBtn = document.getElementById('checkHealth') as HTMLButtonElement | null;
   const healthOut = document.getElementById('healthOut') as HTMLPreElement | null;
@@ -31,6 +38,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const echoForm = document.getElementById('echoForm') as HTMLFormElement | null;
   const echoInput = document.getElementById('echoInput') as HTMLTextAreaElement | null;
   const echoOut = document.getElementById('echoOut') as HTMLPreElement | null;
+  const themeToggle = document.getElementById('themeToggle') as HTMLButtonElement | null;
 
   // Dashboard elements
   const opts = {
@@ -48,6 +56,22 @@ window.addEventListener('DOMContentLoaded', () => {
     relatedInbound: byId<HTMLDivElement>('relatedInbound'),
   };
   createDashboard(opts);
+
+  // Theme toggle
+  if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+      const el = document.documentElement;
+      const isLight = el.getAttribute('data-theme') === 'light';
+      const next = isLight ? '' : 'light';
+      if (next) el.setAttribute('data-theme', next);
+      else el.removeAttribute('data-theme');
+      try {
+        localStorage.setItem('theme', next || 'dark');
+      } catch {
+        // ignore
+      }
+    });
+  }
 
   // Wire diagnostics if visible
   if (healthBtn && healthOut) {
@@ -108,6 +132,8 @@ function createDashboard(opts: DashboardOpts) {
     lastRows: [] as Record<string, unknown>[],
     lastCols: [] as string[],
     relationsByColumn: new Map<string, string>(), // fromColumn -> toTable
+    selectedIndex: -1,
+    expandedIds: new Set<string>(),
   };
 
   async function init() {
@@ -203,7 +229,7 @@ function createDashboard(opts: DashboardOpts) {
         opts.grid,
         cols,
         rows,
-        (row) => onRowClick(row),
+        (row, idx) => onRowClick(row, idx),
         state.table,
         state.relationsByColumn,
       );
@@ -217,6 +243,7 @@ function createDashboard(opts: DashboardOpts) {
 
       // Auto-select the first row so related data loads without extra clicks
       if (rows.length > 0) {
+        state.selectedIndex = 0;
         await onRowClick(rows[0] as Record<string, unknown>, 0);
       } else {
         // Clear inspector if no rows
@@ -235,6 +262,8 @@ function createDashboard(opts: DashboardOpts) {
   }
 
   function setBusy(b: boolean) {
+    const container = opts.grid.parentElement as HTMLElement | null;
+    if (container) container.classList.toggle('loading', b);
     opts.prevPageBtn.disabled = b || state.offset === 0;
   }
 
@@ -256,7 +285,29 @@ function createDashboard(opts: DashboardOpts) {
 
   void init();
 
-  async function onRowClick(row: Record<string, unknown>, _idx: number) {
+  // Keyboard navigation for the main grid
+  const gridEl = opts.grid;
+  gridEl.addEventListener('keydown', (e) => {
+    if (!state.lastRows.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      const next = Math.max(0, Math.min(state.lastRows.length - 1, state.selectedIndex + dir));
+      state.selectedIndex = next;
+      ensureIndexInView(next);
+      void onRowClick(state.lastRows[next]!, next);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      toggleExpandAtIndex(state.selectedIndex);
+    }
+  });
+
+  async function onRowClick(row: Record<string, unknown>, rowIndex: number) {
+    state.selectedIndex = rowIndex;
+    // apply selection highlight
+    const trs = Array.from(opts.grid.querySelectorAll('tbody tr.row')) as HTMLTableRowElement[];
+    for (const tr of trs)
+      tr.classList.toggle('selected', Number(tr.getAttribute('data-index') || '-1') === rowIndex);
     opts.inspectorTitle.textContent = `${state.table} · Object`;
     const summary = renderKeyValues(row);
     opts.objectSummary.classList.remove('muted');
@@ -330,6 +381,37 @@ function createDashboard(opts: DashboardOpts) {
       opts.relatedInbound.textContent = `Failed: ${inbound.status}`;
     }
   }
+  // Ensure a row index is visible within the grid viewport
+  function ensureIndexInView(idx: number) {
+    const container = opts.grid.parentElement as HTMLElement | null;
+    if (!container) return;
+    const rowH = getRowHeight();
+    const y = idx * rowH;
+    if (y < container.scrollTop) container.scrollTop = y;
+    else if (y + rowH > container.scrollTop + container.clientHeight) {
+      container.scrollTop = y - Math.max(0, container.clientHeight - rowH);
+    }
+  }
+
+  function getRowHeight(): number {
+    const css = getComputedStyle(document.documentElement);
+    const v = css.getPropertyValue('--row-h').trim();
+    const px = Number.parseInt(v.replace('px', ''));
+    return Number.isFinite(px) && px > 0 ? px : 32;
+  }
+
+  function toggleExpandAtIndex(idx: number) {
+    if (idx < 0) return;
+    const rows = Array.from(opts.grid.querySelectorAll('tbody tr.row')) as HTMLTableRowElement[];
+    for (const tr of rows) {
+      const i = Number(tr.getAttribute('data-index') || '-1');
+      if (i === idx) {
+        const btn = tr.querySelector('button.expand-toggle') as HTMLButtonElement | null;
+        if (btn) btn.click();
+        break;
+      }
+    }
+  }
 }
 
 function deriveColumns(rows: Record<string, unknown>[]): string[] {
@@ -353,7 +435,14 @@ function renderGrid(
   relations?: Map<string, string>,
 ) {
   tableEl.innerHTML = '';
+  tableEl.setAttribute('role', 'grid');
+  tableEl.setAttribute('aria-rowcount', String(rows.length));
   if (rows.length === 0) return;
+  // Large datasets: use virtualized renderer
+  if (rows.length >= 500) {
+    renderGridVirtualized(tableEl, cols, rows, onRowClick, tableName, relations);
+    return;
+  }
 
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
@@ -537,6 +626,247 @@ function renderGrid(
     tbody.appendChild(tr);
   });
   tableEl.appendChild(tbody);
+}
+
+// Virtualized grid renderer: renders only the visible slice with spacers
+function renderGridVirtualized(
+  tableEl: HTMLTableElement,
+  cols: string[],
+  rows: Record<string, unknown>[],
+  onRowClick: (row: Record<string, unknown>, idx: number) => void,
+  tableName?: string,
+  relations?: Map<string, string>,
+) {
+  tableEl.innerHTML = '';
+  tableEl.setAttribute('role', 'grid');
+  tableEl.setAttribute('aria-rowcount', String(rows.length));
+  if (rows.length === 0) return;
+
+  const container = tableEl.parentElement as HTMLElement | null;
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  const thExp = document.createElement('th');
+  thExp.textContent = '';
+  thExp.style.width = '24px';
+  trh.appendChild(thExp);
+  for (const c of cols) {
+    const th = document.createElement('th');
+    th.textContent = c.endsWith('_id') ? friendlyLabel(c, '') : c;
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh);
+  tableEl.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  tableEl.appendChild(tbody);
+
+  const css = getComputedStyle(document.documentElement);
+  const rowHVal = css.getPropertyValue('--row-h').trim();
+  const rowH = Number.parseInt(rowHVal.replace('px', '')) || 32;
+  const overscan = 6;
+
+  function renderSlice(start: number) {
+    const viewport = container?.clientHeight ?? 560;
+    const visible = Math.ceil(viewport / rowH) + overscan;
+    const s = Math.max(0, Math.min(rows.length, start));
+    const e = Math.min(rows.length, s + visible);
+    tbody.innerHTML = '';
+    const topH = s * rowH;
+    if (topH > 0) {
+      const tr = document.createElement('tr');
+      tr.className = 'v-spacer';
+      const td = document.createElement('td');
+      td.colSpan = cols.length + 1;
+      td.style.height = `${topH}px`;
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+    for (let i = s; i < e; i++) tbody.appendChild(renderRow(i));
+    const bottomH = (rows.length - e) * rowH;
+    if (bottomH > 0) {
+      const tr = document.createElement('tr');
+      tr.className = 'v-spacer';
+      const td = document.createElement('td');
+      td.colSpan = cols.length + 1;
+      td.style.height = `${bottomH}px`;
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  }
+
+  function onScroll() {
+    const st = container?.scrollTop ?? 0;
+    const start = Math.floor(st / rowH) - Math.floor(overscan / 2);
+    renderSlice(Math.max(0, start));
+  }
+  if (container) container.addEventListener('scroll', onScroll);
+  renderSlice(0);
+
+  function renderRow(i: number): HTMLTableRowElement {
+    const r = rows[i]!;
+    const tr = document.createElement('tr');
+    tr.className = 'row row-click';
+    tr.setAttribute('role', 'row');
+    tr.setAttribute('data-index', String(i));
+    tr.addEventListener('click', () => onRowClick(r, i));
+    // Expander cell
+    const tdExp = document.createElement('td');
+    tdExp.className = 'expander-cell';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'expand-toggle';
+    btn.setAttribute('aria-label', 'Toggle related');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = '▶';
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (btn.dataset.expanded === 'true') {
+        const next = tr.nextElementSibling as HTMLTableRowElement | null;
+        if (next && next.classList.contains('expand-row')) next.remove();
+        btn.textContent = '▶';
+        btn.dataset.expanded = 'false';
+        btn.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      btn.textContent = '▼';
+      btn.dataset.expanded = 'true';
+      btn.setAttribute('aria-expanded', 'true');
+      const expandTr = document.createElement('tr');
+      expandTr.className = 'expand-row';
+      const td = document.createElement('td');
+      td.colSpan = cols.length + 1; // expander + all data columns
+      const wrap = document.createElement('div');
+      wrap.className = 'expand-wrap';
+      const outCard = document.createElement('div');
+      outCard.className = 'card';
+      outCard.innerHTML = '<div class="muted">Related</div><div class="rel-out"></div>';
+      const inCard = document.createElement('div');
+      inCard.className = 'card';
+      inCard.innerHTML = '<div class="muted">Referenced By</div><div class="rel-in"></div>';
+      wrap.appendChild(outCard);
+      wrap.appendChild(inCard);
+      td.appendChild(wrap);
+      expandTr.appendChild(td);
+      tr.insertAdjacentElement('afterend', expandTr);
+
+      const idVal = (r as Record<string, unknown>)['id'];
+      const outEl = outCard.querySelector('.rel-out') as HTMLDivElement;
+      const inEl = inCard.querySelector('.rel-in') as HTMLDivElement;
+      if (idVal == null) {
+        outEl.textContent = '(row has no id)';
+        inEl.textContent = '';
+        return;
+      }
+      if (!tableName) {
+        outEl.textContent = '(missing table context)';
+        inEl.textContent = '';
+        return;
+      }
+      void (async () => {
+        outEl.textContent = 'Loading…';
+        inEl.textContent = 'Loading…';
+        const idStr = String(idVal);
+        try {
+          const ob = await fetchJSON(
+            `/api/sb/outbound?table=${encodeURIComponent(tableName)}&id=${encodeURIComponent(idStr)}`,
+          );
+          if (ob.ok) {
+            outEl.innerHTML = '';
+            type OutboundRef = {
+              column: string;
+              toTable: string;
+              row: Record<string, unknown> | null;
+            };
+            const refs = (ob.data as { refs: OutboundRef[] }).refs;
+            for (const r2 of refs) {
+              const card = document.createElement('div');
+              card.className = 'card';
+              const title = friendlyLabel(r2.column, r2.toTable);
+              card.innerHTML = `<div class="muted">${title}</div>`;
+              if (r2.row) {
+                const kv = renderKeyValues(r2.row);
+                card.appendChild(kv);
+                void enrichGitHubInKV(kv, r2.row, r2.toTable);
+                try {
+                  const map = await loadRelationsMap(r2.toTable);
+                  void enrichForeignInKV(kv, r2.row, r2.toTable, map);
+                } catch {
+                  // noop
+                }
+              } else card.innerHTML += '<div class="muted">(none)</div>';
+              outEl.appendChild(card);
+            }
+            if (refs.length === 0) outEl.textContent = '(none)';
+          } else {
+            outEl.textContent = `Failed: ${ob.status}`;
+          }
+        } catch (err) {
+          outEl.textContent = `Error: ${String(err)}`;
+        }
+
+        try {
+          const ib = await fetchJSON(
+            `/api/sb/inbound?table=${encodeURIComponent(tableName)}&id=${encodeURIComponent(idStr)}&limit=3`,
+          );
+          if (ib.ok) {
+            inEl.innerHTML = '';
+            type InRef = {
+              fromTable: string;
+              fromColumn: string;
+              rows: Record<string, unknown>[];
+              total: number | null;
+            };
+            const refs = (ib.data as { refs: InRef[] }).refs;
+            for (const r3 of refs) {
+              const card = document.createElement('div');
+              card.className = 'card';
+              const header = document.createElement('div');
+              header.className = 'muted';
+              header.textContent = `${r3.fromTable}.${r3.fromColumn} (${r3.total ?? 0})`;
+              card.appendChild(header);
+              if (r3.rows && r3.rows.length > 0) {
+                const tbl = renderMiniTable(r3.rows) as HTMLTableElement;
+                card.appendChild(tbl);
+                void enrichGitHubInMiniTable(tbl, r3.rows);
+                try {
+                  const map = await loadRelationsMap(r3.fromTable);
+                  void enrichMiniTableForeigns(tbl, r3.rows, map);
+                } catch {
+                  // noop
+                }
+              }
+              inEl.appendChild(card);
+            }
+            if (refs.length === 0) inEl.textContent = '(none)';
+          } else {
+            inEl.textContent = `Failed: ${ib.status}`;
+          }
+        } catch (err) {
+          inEl.textContent = `Error: ${String(err)}`;
+        }
+      })();
+    });
+    tdExp.appendChild(btn);
+    tr.appendChild(tdExp);
+    for (const c of cols) {
+      const td = document.createElement('td');
+      td.setAttribute('role', 'gridcell');
+      const v = (r as Record<string, unknown>)[c];
+      if (c === 'id') {
+        td.textContent = '';
+      } else if (c.endsWith('_id') && tableName) {
+        td.textContent = '';
+        const toTable = relations?.get(c) ?? null;
+        void renderForeignCell(td, c, toTable, v, tableName);
+      } else {
+        const text = formatCell(v);
+        td.textContent = text;
+        if (text) td.title = text;
+      }
+      tr.appendChild(td);
+    }
+    return tr;
+  }
 }
 
 // cache for referenced rows per table:id

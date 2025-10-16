@@ -33,6 +33,11 @@ The Supabase Explorer provides a compact way to browse tables and see how rows r
   - Heuristics need `*_id` to match a table name (`user_id` → `users`).
 - To get exact relationships, install the `public.db_relations` RPC described in `docs/RELATIONS.md` (no UI change required).
 
+## Keyboard & Theme
+
+- Grid navigation: Arrow Up/Down moves selection; Enter toggles the row expander. The selected row is highlighted. The grid itself is focusable; press Tab to focus, then use the keys.
+- Theme toggle: click the “Theme” button in the toolbar to switch between dark and light. The choice is saved to `localStorage` and restored on reload.
+
 ## Notes on Expanders
 
 - Expanding a row makes two API calls (`/api/sb/outbound` and `/api/sb/inbound`) for that row ID.

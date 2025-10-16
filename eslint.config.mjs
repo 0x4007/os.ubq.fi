@@ -4,7 +4,16 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['coverage', 'dist', 'build', 'public', '**/*.d.ts', '**/*.min.*'],
+    ignores: [
+      'coverage',
+      'dist',
+      'build',
+      'public',
+      '**/public/**',
+      'os.ubq.fi-sprint1',
+      '**/*.d.ts',
+      '**/*.min.*',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
