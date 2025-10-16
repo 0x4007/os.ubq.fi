@@ -997,7 +997,7 @@ async function renderForeignCell(
           : `id.eq.${encodeURIComponent(idStr)}`;
       // Use global navigate via a custom event to avoid tight coupling
       try {
-        (window as any).osubq_nav?.(targetTable, filter);
+        ((window as unknown) as { osubq_nav?: (t: string, f: string) => void }).osubq_nav?.(targetTable, filter);
       } catch {
         // ignore if not wired
       }
