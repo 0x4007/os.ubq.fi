@@ -36,7 +36,7 @@
 
 /* Light theme overrides */
 [data-theme="light"] {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f7f8fa;
   --fg: #0f1720;
   --muted: #5b6673;
