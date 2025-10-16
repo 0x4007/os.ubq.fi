@@ -33,6 +33,16 @@ The Supabase Explorer provides a compact way to browse tables and see how rows r
   - Heuristics need `*_id` to match a table name (`user_id` → `users`).
 - To get exact relationships, install the `public.db_relations` RPC described in `docs/RELATIONS.md` (no UI change required).
 
+## Export & Print
+
+- Export CSV — downloads the current grid slice using the visible columns (primary `id` excluded). Values are safely quoted for Excel/Numbers.
+- Export JSON — downloads `{ columns, rows, meta }` where `meta` includes `table`, `limit`, `offset`, and `total` if known.
+- Print — use the browser’s print dialog; the UI includes a print stylesheet that hides navigation chrome and lays out content as a clean, single-column document with sensible page breaks.
+
+Notes
+- Exports operate purely on the client using already-fetched rows; no extra server work.
+- Filenames include the table name and range for traceability, e.g., `users_001-050.csv`.
+
 ## Notes on Expanders
 
 - Expanding a row makes two API calls (`/api/sb/outbound` and `/api/sb/inbound`) for that row ID.

@@ -41,7 +41,10 @@ window.addEventListener('DOMContentLoaded', () => {
     pageSizeSel: byId<HTMLSelectElement>('pageSize'),
     prevPageBtn: byId<HTMLButtonElement>('prevPage'),
     nextPageBtn: byId<HTMLButtonElement>('nextPage'),
+    exportCsvBtn: byId<HTMLButtonElement>('exportCsv'),
+    exportJsonBtn: byId<HTMLButtonElement>('exportJson'),
     grid: byId<HTMLTableElement>('sbGrid'),
+    summaryEl: byId<HTMLDivElement>('summaryBar'),
     inspectorTitle: byId<HTMLHeadingElement>('inspectorTitle'),
     objectSummary: byId<HTMLDivElement>('objectSummary'),
     relatedOutbound: byId<HTMLDivElement>('relatedOutbound'),
@@ -90,7 +93,10 @@ type DashboardOpts = {
   pageSizeSel: HTMLSelectElement;
   prevPageBtn: HTMLButtonElement;
   nextPageBtn: HTMLButtonElement;
+  exportCsvBtn: HTMLButtonElement;
+  exportJsonBtn: HTMLButtonElement;
   grid: HTMLTableElement;
+  summaryEl: HTMLDivElement;
   inspectorTitle: HTMLHeadingElement;
   objectSummary: HTMLDivElement;
   relatedOutbound: HTMLDivElement;
@@ -207,6 +213,8 @@ function createDashboard(opts: DashboardOpts) {
         state.table,
         state.relationsByColumn,
       );
+      // Update lightweight summary/insights
+      renderSummary(opts.summaryEl, state.table, cols, rows);
       const rn = rows.length;
       const range = rn > 0 ? `${state.offset + 1}–${state.offset + rn}` : '0';
       const total = state.total != null ? ` of ${state.total}` : '';
@@ -253,6 +261,29 @@ function createDashboard(opts: DashboardOpts) {
     void loadPage(true);
   });
   opts.tableSearch.addEventListener('input', renderTableList);
+
+  // Wire exports (CSV/JSON) from current in-memory slice
+  opts.exportCsvBtn.addEventListener('click', () => {
+    const cols = state.lastCols.filter((c) => c !== 'id');
+    const csv = toCSV(cols, state.lastRows);
+    const range = state.lastRows.length
+      ? `${String(state.offset + 1).padStart(3, '0')}-${String(state.offset + state.lastRows.length).padStart(3, '0')}`
+      : 'empty';
+    const fname = sanitizeFilename(`${state.table || 'data'}_${range}.csv`);
+    downloadText(fname, 'text/csv', csv);
+  });
+  opts.exportJsonBtn.addEventListener('click', () => {
+    const payload = {
+      columns: state.lastCols.filter((c) => c !== 'id'),
+      rows: state.lastRows,
+      meta: { table: state.table, limit: state.limit, offset: state.offset, total: state.total },
+    };
+    const range = state.lastRows.length
+      ? `${String(state.offset + 1).padStart(3, '0')}-${String(state.offset + state.lastRows.length).padStart(3, '0')}`
+      : 'empty';
+    const fname = sanitizeFilename(`${state.table || 'data'}_${range}.json`);
+    downloadText(fname, 'application/json', JSON.stringify(payload, null, 2));
+  });
 
   void init();
 
@@ -330,6 +361,91 @@ function createDashboard(opts: DashboardOpts) {
       opts.relatedInbound.textContent = `Failed: ${inbound.status}`;
     }
   }
+}
+
+// --- Export helpers & lightweight insights ---
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, '_');
+}
+
+function toCSV(cols: string[], rows: Record<string, unknown>[]): string {
+  const esc = (v: unknown): string => {
+    let s: string;
+    if (v == null) s = '';
+    else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
+    else s = safeJSONStringify(v);
+    if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  const header = cols.join(',');
+  const body = rows.map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(',')).join('\n');
+  return body ? header + '\n' + body : header + '\n';
+}
+
+function downloadText(filename: string, mime: string, text: string): void {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function safeJSONStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function renderSummary(
+  container: HTMLElement,
+  table: string,
+  cols: string[],
+  rows: Record<string, unknown>[],
+) {
+  if (!container) return;
+  if (!rows || rows.length === 0) {
+    container.textContent = '';
+    return;
+  }
+  // Choose a categorical column to summarize
+  const preferred = ['node_type', 'status', 'type'];
+  let col = preferred.find((c) => cols.includes(c)) ?? '';
+  if (!col) {
+    for (const c of cols) {
+      if (c.endsWith('_id')) continue;
+      const vals = rows.map((r) => r[c]).filter((v) => v != null);
+      const strVals = vals.map((v) => String(v));
+      const uniq = new Set(strVals);
+      if (uniq.size > 1 && uniq.size <= 10) {
+        col = c;
+        break;
+      }
+    }
+  }
+  const total = rows.length;
+  let html = `<span class="muted">${table || 'Rows'}: ${total}</span>`;
+  if (col) {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const k = String(r[col] ?? '');
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    const max = Math.max(1, ...counts.values());
+    html += '<div class="bars">';
+    for (const [k, n] of counts.entries()) {
+      const pct = Math.round((n / max) * 100);
+      html += `<div class="bar"><span>${k || '(none)'}</span><span class="track"><span class="fill" style="width:${pct}%"></span></span><span>${n}</span></div>`;
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
 }
 
 function deriveColumns(rows: Record<string, unknown>[]): string[] {
