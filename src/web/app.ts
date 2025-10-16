@@ -21,6 +21,63 @@ function byId<T extends HTMLElement>(id: string): T {
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
 }
+// Global navigation hook type
+declare global {
+  interface Window {
+    osubq_nav?: (t: string, f: string) => void;
+  }
+}
+// --- URL + localStorage helpers ---
+function parseURLState(): {
+  table: string;
+  limit: number | null;
+  offset: number | null;
+  filter: string | null;
+  rowId: string | null;
+} {
+  const url = new URL(location.href);
+  const limit = url.searchParams.get('limit');
+  const offset = url.searchParams.get('offset');
+  return {
+    table: url.searchParams.get('table') ?? '',
+    limit: limit ? Number.parseInt(limit) : null,
+    offset: offset ? Number.parseInt(offset) : null,
+    filter: url.searchParams.get('filter'),
+    rowId: url.searchParams.get('rowId'),
+  };
+}
+
+function buildURL(
+  table: string,
+  limit: number,
+  offset: number,
+  filter: string | null,
+  rowId: string | null,
+): string {
+  const u = new URL(location.pathname, location.origin);
+  if (table) u.searchParams.set('table', table);
+  if (limit) u.searchParams.set('limit', String(limit));
+  if (offset) u.searchParams.set('offset', String(offset));
+  if (filter) u.searchParams.set('filter', filter);
+  if (rowId) u.searchParams.set('rowId', rowId);
+  return u.toString();
+}
+
+function lsGet(key: string): unknown {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function lsSet(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   // Apply saved theme preference early
@@ -49,13 +106,124 @@ window.addEventListener('DOMContentLoaded', () => {
     pageSizeSel: byId<HTMLSelectElement>('pageSize'),
     prevPageBtn: byId<HTMLButtonElement>('prevPage'),
     nextPageBtn: byId<HTMLButtonElement>('nextPage'),
+    exportCsvBtn: byId<HTMLButtonElement>('exportCsv'),
+    exportJsonBtn: byId<HTMLButtonElement>('exportJson'),
     grid: byId<HTMLTableElement>('sbGrid'),
+    summaryEl: byId<HTMLDivElement>('summaryBar'),
     inspectorTitle: byId<HTMLHeadingElement>('inspectorTitle'),
     objectSummary: byId<HTMLDivElement>('objectSummary'),
     relatedOutbound: byId<HTMLDivElement>('relatedOutbound'),
     relatedInbound: byId<HTMLDivElement>('relatedInbound'),
   };
   createDashboard(opts);
+
+  // Saved Views wiring (sidebar)
+  const viewList = document.getElementById('viewList') as HTMLUListElement | null;
+  const saveViewBtn = document.getElementById('saveViewBtn') as HTMLButtonElement | null;
+  const applyFirstViewBtn = document.getElementById(
+    'applyFirstViewBtn',
+  ) as HTMLButtonElement | null;
+  if (viewList && saveViewBtn) {
+    const VIEWS_INDEX_KEY = 'views:index';
+    const keyFor = (name: string) => `views:${name}`;
+    const loadIndex = (): string[] => {
+      try {
+        const raw = localStorage.getItem(VIEWS_INDEX_KEY);
+        const arr = raw ? (JSON.parse(raw) as string[]) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    };
+    const saveIndex = (names: string[]) => {
+      try {
+        localStorage.setItem(VIEWS_INDEX_KEY, JSON.stringify(Array.from(new Set(names))));
+      } catch {
+        /* ignore */
+      }
+    };
+    const saveView = (name: string, url: string) => {
+      try {
+        localStorage.setItem(keyFor(name), url);
+        const idx = loadIndex();
+        if (!idx.includes(name)) idx.push(name);
+        saveIndex(idx);
+      } catch {
+        /* ignore */
+      }
+    };
+    const loadView = (name: string): string | null => {
+      try {
+        return localStorage.getItem(keyFor(name));
+      } catch {
+        return null;
+      }
+    };
+    const removeView = (name: string) => {
+      try {
+        localStorage.removeItem(keyFor(name));
+        const idx = loadIndex().filter((n) => n !== name);
+        saveIndex(idx);
+      } catch {
+        /* ignore */
+      }
+    };
+    const renderList = () => {
+      viewList.innerHTML = '';
+      const names = loadIndex();
+      for (const n of names) {
+        const li = document.createElement('li');
+        const label = document.createElement('span');
+        label.textContent = n;
+        label.style.marginRight = '0.5rem';
+        const apply = document.createElement('button');
+        apply.textContent = 'Apply';
+        apply.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const u = loadView(n);
+          if (!u) return;
+          try {
+            history.pushState({}, '', u);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          } catch {
+            location.href = u;
+          }
+        });
+        const del = document.createElement('button');
+        del.textContent = 'Remove';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeView(n);
+          renderList();
+        });
+        li.appendChild(label);
+        li.appendChild(apply);
+        li.appendChild(del);
+        viewList.appendChild(li);
+      }
+    };
+    renderList();
+    saveViewBtn.addEventListener('click', () => {
+      const name = prompt('Save current view as…');
+      if (!name) return;
+      saveView(name.trim(), location.href);
+      renderList();
+    });
+    if (applyFirstViewBtn) {
+      applyFirstViewBtn.addEventListener('click', () => {
+        const names = loadIndex();
+        if (names.length === 0) return;
+        const u = loadView(names[0]!);
+        if (!u) return;
+        try {
+          history.pushState({}, '', u);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        } catch {
+          location.href = u;
+        }
+      });
+    }
+  }
 
   // Theme toggle
   if (themeToggle) {
@@ -114,7 +282,10 @@ type DashboardOpts = {
   pageSizeSel: HTMLSelectElement;
   prevPageBtn: HTMLButtonElement;
   nextPageBtn: HTMLButtonElement;
+  exportCsvBtn: HTMLButtonElement;
+  exportJsonBtn: HTMLButtonElement;
   grid: HTMLTableElement;
+  summaryEl: HTMLDivElement;
   inspectorTitle: HTMLHeadingElement;
   objectSummary: HTMLDivElement;
   relatedOutbound: HTMLDivElement;
@@ -126,6 +297,8 @@ function createDashboard(opts: DashboardOpts) {
     table: '',
     limit: 50,
     offset: 0,
+    filter: null as string | null,
+    rowId: null as string | null,
     total: 0 as number | null,
     tables: [] as string[], // visible (non-empty) tables
     allTables: [] as string[],
@@ -137,6 +310,8 @@ function createDashboard(opts: DashboardOpts) {
   };
 
   async function init() {
+    // Restore URL-driven state early
+    restoreFromURL();
     const res = await fetchJSON('/api/sb/tables');
     if (!res.ok) {
       opts.tableSubtitle.textContent = `Failed to load tables: ${res.status}`;
@@ -148,6 +323,14 @@ function createDashboard(opts: DashboardOpts) {
     const nonEmpty = await filterNonEmptyTables(state.allTables);
     state.tables = nonEmpty;
     renderTableList();
+
+    // Pick initial table: URL > localStorage(lastTable)
+    const pref =
+      state.table || (typeof lsGet('lastTable') === 'string' ? (lsGet('lastTable') as string) : '');
+    if (pref && state.tables.includes(pref)) await selectTable(pref);
+    // Restore sidebar scroll position
+    const st = Number.parseInt(String(lsGet('sidebarScroll') ?? '0'));
+    if (Number.isFinite(st)) opts.tableList.scrollTop = st;
   }
 
   async function filterNonEmptyTables(tables: string[]): Promise<string[]> {
@@ -186,128 +369,195 @@ function createDashboard(opts: DashboardOpts) {
   async function selectTable(t: string) {
     state.table = t;
     state.offset = 0;
+    state.filter = null;
     opts.tableTitle.textContent = t;
     opts.tableSubtitle.textContent = '';
-    opts.inspectorTitle.textContent = 'Object';
-    opts.objectSummary.textContent = '(select a row)';
-    opts.objectSummary.classList.add('muted');
-    opts.relatedOutbound.innerHTML = '';
-    opts.relatedInbound.innerHTML = '';
-    renderTableList();
-    // load relations mapping for this table (fromColumn -> toTable)
-    state.relationsByColumn.clear();
-    try {
-      const r = await fetchJSON(`/api/sb/relations?table=${encodeURIComponent(state.table)}`);
-      if (r.ok) {
-        const rel = r.data as { outbound: { fromColumn: string; toTable: string }[] };
-        for (const o of rel.outbound) state.relationsByColumn.set(o.fromColumn, o.toTable);
+    async function onRowClick(row: Record<string, unknown>, rowIndex: number) {
+      // apply selection highlight from grid keyboard/mouse
+      state.selectedIndex = rowIndex;
+      const trs = Array.from(opts.grid.querySelectorAll('tbody tr.row')) as HTMLTableRowElement[];
+      for (const tr of trs)
+        tr.classList.toggle('selected', Number(tr.getAttribute('data-index') || '-1') === rowIndex);
+      opts.inspectorTitle.textContent = 'Object';
+      opts.objectSummary.textContent = '(select a row)';
+      opts.objectSummary.classList.add('muted');
+      opts.relatedOutbound.innerHTML = '';
+      opts.relatedInbound.innerHTML = '';
+      renderTableList();
+      lsSet('lastTable', t);
+      pushURL();
+      // load relations mapping for this table (fromColumn -> toTable)
+      state.relationsByColumn.clear();
+      try {
+        const r = await fetchJSON(`/api/sb/relations?table=${encodeURIComponent(state.table)}`);
+        if (r.ok) {
+          const rel = r.data as { outbound: { fromColumn: string; toTable: string }[] };
+          for (const o of rel.outbound) state.relationsByColumn.set(o.fromColumn, o.toTable);
+        }
+      } catch {
+        // ignore relation load error; grid will degrade to raw values
       }
-    } catch {
-      // ignore relation load error; grid will degrade to raw values
+      await loadPage(true);
     }
-    await loadPage(true);
-  }
 
-  async function loadPage(reset = false) {
-    if (!state.table) return;
-    if (reset) state.offset = 0;
-    setBusy(true);
-    try {
-      const url = new URL('/api/sb/rows', location.origin);
-      url.searchParams.set('table', state.table);
-      url.searchParams.set('limit', String(state.limit));
-      url.searchParams.set('offset', String(state.offset));
-      const res = await fetch(url.toString(), { headers: { accept: 'application/json' } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-      const rows = (data.rows ?? []) as Record<string, unknown>[];
-      state.total = typeof data.total === 'number' ? (data.total as number) : null;
-      const cols = deriveColumns(rows);
-      state.lastRows = rows;
-      state.lastCols = cols;
-      renderGrid(
-        opts.grid,
-        cols,
-        rows,
-        (row, idx) => onRowClick(row, idx),
-        state.table,
-        state.relationsByColumn,
-      );
-      const rn = rows.length;
-      const range = rn > 0 ? `${state.offset + 1}–${state.offset + rn}` : '0';
-      const total = state.total != null ? ` of ${state.total}` : '';
-      opts.tableSubtitle.textContent = `${state.table}: ${range}${total}`;
-      opts.prevPageBtn.disabled = state.offset === 0;
-      opts.nextPageBtn.disabled =
-        state.total != null ? state.offset + rn >= state.total : rn < state.limit;
+    async function loadPage(reset = false) {
+      if (!state.table) return;
+      if (reset) state.offset = 0;
+      setBusy(true);
+      try {
+        const url = new URL('/api/sb/rows', location.origin);
+        url.searchParams.set('table', state.table);
+        url.searchParams.set('limit', String(state.limit));
+        url.searchParams.set('offset', String(state.offset));
+        if (state.filter) url.searchParams.append('filter', state.filter);
+        const res = await fetch(url.toString(), { headers: { accept: 'application/json' } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+        const rows = (data.rows ?? []) as Record<string, unknown>[];
+        state.total = typeof data.total === 'number' ? (data.total as number) : null;
+        const cols = deriveColumns(rows);
+        state.lastRows = rows;
+        state.lastCols = cols;
+        renderGrid(
+          opts.grid,
+          cols,
+          rows,
+          (row, idx) => onRowClick(row, idx),
+          state.table,
+          state.relationsByColumn,
+        );
+        // Update lightweight summary/insights
+        renderSummary(opts.summaryEl, state.table, cols, rows);
+        const rn = rows.length;
+        const range = rn > 0 ? `${state.offset + 1}–${state.offset + rn}` : '0';
+        const total = state.total != null ? ` of ${state.total}` : '';
+        opts.tableSubtitle.textContent = `${state.table}: ${range}${total}`;
+        opts.prevPageBtn.disabled = state.offset === 0;
+        opts.nextPageBtn.disabled =
+          state.total != null ? state.offset + rn >= state.total : rn < state.limit;
 
-      // Auto-select the first row so related data loads without extra clicks
-      if (rows.length > 0) {
-        state.selectedIndex = 0;
-        await onRowClick(rows[0] as Record<string, unknown>, 0);
-      } else {
-        // Clear inspector if no rows
-        opts.inspectorTitle.textContent = `${state.table} · Object`;
-        opts.objectSummary.classList.add('muted');
-        opts.objectSummary.textContent = '(no rows)';
-        opts.relatedOutbound.innerHTML = '';
-        opts.relatedInbound.innerHTML = '';
+        // Auto-select the first row or rowId from deep link
+        if (rows.length > 0) {
+          let idx = 0;
+          if (state.rowId) {
+            const found = rows.findIndex(
+              (r) => String((r as Record<string, unknown>)['id']) === state.rowId,
+            );
+            if (found >= 0) idx = found;
+          }
+          state.selectedIndex = idx;
+          await onRowClick(rows[idx] as Record<string, unknown>, idx);
+        } else {
+          // Clear inspector if no rows
+          opts.inspectorTitle.textContent = `${state.table} · Object`;
+          opts.objectSummary.classList.add('muted');
+          opts.objectSummary.textContent = '(no rows)';
+          opts.relatedOutbound.innerHTML = '';
+          opts.relatedInbound.innerHTML = '';
+        }
+      } catch (err) {
+        opts.tableSubtitle.textContent = `Query error: ${String(err)}`;
+        opts.grid.innerHTML = '';
+      } finally {
+        setBusy(false);
       }
-    } catch (err) {
-      opts.tableSubtitle.textContent = `Query error: ${String(err)}`;
-      opts.grid.innerHTML = '';
-    } finally {
-      setBusy(false);
     }
-  }
 
-  function setBusy(b: boolean) {
-    const container = opts.grid.parentElement as HTMLElement | null;
-    if (container) container.classList.toggle('loading', b);
-    opts.prevPageBtn.disabled = b || state.offset === 0;
-  }
-
-  opts.prevPageBtn.addEventListener('click', () => {
-    state.offset = Math.max(0, state.offset - state.limit);
-    void loadPage(false);
-  });
-  opts.nextPageBtn.addEventListener('click', () => {
-    state.offset += state.limit;
-    void loadPage(false);
-  });
-  opts.pageSizeSel.addEventListener('change', () => {
-    const v = Number.parseInt(opts.pageSizeSel.value);
-    if (Number.isFinite(v)) state.limit = v;
-    state.offset = 0;
-    void loadPage(true);
-  });
-  opts.tableSearch.addEventListener('input', renderTableList);
-
-  void init();
-
-  // Keyboard navigation for the main grid
-  const gridEl = opts.grid;
-  gridEl.addEventListener('keydown', (e) => {
-    if (!state.lastRows.length) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const dir = e.key === 'ArrowDown' ? 1 : -1;
-      const next = Math.max(0, Math.min(state.lastRows.length - 1, state.selectedIndex + dir));
-      state.selectedIndex = next;
-      ensureIndexInView(next);
-      void onRowClick(state.lastRows[next]!, next);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      toggleExpandAtIndex(state.selectedIndex);
+    function setBusy(b: boolean) {
+      const container = opts.grid.parentElement as HTMLElement | null;
+      if (container) container.classList.toggle('loading', b);
+      opts.prevPageBtn.disabled = b || state.offset === 0;
     }
-  });
 
-  async function onRowClick(row: Record<string, unknown>, rowIndex: number) {
-    state.selectedIndex = rowIndex;
-    // apply selection highlight
-    const trs = Array.from(opts.grid.querySelectorAll('tbody tr.row')) as HTMLTableRowElement[];
-    for (const tr of trs)
-      tr.classList.toggle('selected', Number(tr.getAttribute('data-index') || '-1') === rowIndex);
+    opts.prevPageBtn.addEventListener('click', () => {
+      state.offset = Math.max(0, state.offset - state.limit);
+      pushURL(true);
+      void loadPage(false);
+    });
+    opts.nextPageBtn.addEventListener('click', () => {
+      state.offset += state.limit;
+      pushURL(true);
+      void loadPage(false);
+    });
+    opts.pageSizeSel.addEventListener('change', () => {
+      const v = Number.parseInt(opts.pageSizeSel.value);
+      if (Number.isFinite(v)) state.limit = v;
+      state.offset = 0;
+      pushURL(true);
+      void loadPage(true);
+    });
+    opts.tableSearch.addEventListener('input', renderTableList);
+    opts.tableList.addEventListener('scroll', () => {
+      lsSet('sidebarScroll', opts.tableList.scrollTop);
+    });
+
+    // Wire exports (CSV/JSON) from current in-memory slice
+    opts.exportCsvBtn.addEventListener('click', () => {
+      const cols = state.lastCols.filter((c) => c !== 'id');
+      const csv = toCSV(cols, state.lastRows);
+      const range = state.lastRows.length
+        ? `${String(state.offset + 1).padStart(3, '0')}-${String(state.offset + state.lastRows.length).padStart(3, '0')}`
+        : 'empty';
+      const fname = sanitizeFilename(`${state.table || 'data'}_${range}.csv`);
+      downloadText(fname, 'text/csv', csv);
+    });
+    opts.exportJsonBtn.addEventListener('click', () => {
+      const payload = {
+        columns: state.lastCols.filter((c) => c !== 'id'),
+        rows: state.lastRows,
+        meta: { table: state.table, limit: state.limit, offset: state.offset, total: state.total },
+      };
+      const range = state.lastRows.length
+        ? `${String(state.offset + 1).padStart(3, '0')}-${String(state.offset + state.lastRows.length).padStart(3, '0')}`
+        : 'empty';
+      const fname = sanitizeFilename(`${state.table || 'data'}_${range}.json`);
+      downloadText(fname, 'application/json', JSON.stringify(payload, null, 2));
+    });
+
+    void init();
+
+    // --- URL state ---
+    function pushURL(push = false) {
+      const url = buildURL(state.table, state.limit, state.offset, state.filter, state.rowId);
+      if (push) history.pushState({}, '', url);
+      else history.replaceState({}, '', url);
+    }
+    function restoreFromURL() {
+      const u = parseURLState();
+      if (u.table) state.table = u.table;
+      if (Number.isFinite(u.limit ?? NaN) && u.limit) state.limit = u.limit;
+      if (Number.isFinite(u.offset ?? NaN) && u.offset) state.offset = u.offset;
+      state.filter = u.filter;
+      state.rowId = u.rowId;
+      // reflect page size UI
+      const v = String(state.limit);
+      if (Array.from(opts.pageSizeSel.options).some((o) => o.value === v)) {
+        opts.pageSizeSel.value = v;
+      }
+    }
+
+    window.addEventListener('popstate', () => {
+      restoreFromURL();
+      if (state.table) void selectTable(state.table);
+    });
+
+    // Keyboard navigation for the main grid
+    const gridEl = opts.grid;
+    gridEl.addEventListener('keydown', (e) => {
+      if (!state.lastRows.length) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        const next = Math.max(0, Math.min(state.lastRows.length - 1, state.selectedIndex + dir));
+        state.selectedIndex = next;
+        ensureIndexInView(next);
+        void onRowClick(state.lastRows[next]!, next);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        toggleExpandAtIndex(state.selectedIndex);
+      }
+    });
+
     opts.inspectorTitle.textContent = `${state.table} · Object`;
     const summary = renderKeyValues(row);
     opts.objectSummary.classList.remove('muted');
@@ -346,6 +596,16 @@ function createDashboard(opts: DashboardOpts) {
           const kv = renderKeyValues(r.row);
           card.appendChild(kv);
           void enrichGitHubInKV(kv, r.row, r.toTable);
+          // Drill-through: clicking navigates to referenced table filtered by id
+          const refId = (r.row as Record<string, unknown>)['id'];
+          if (refId != null) {
+            card.style.cursor = 'pointer';
+            card.title = `Open ${r.toTable} where id = ${String(refId)}`;
+            card.addEventListener('click', (e) => {
+              e.stopPropagation();
+              void navigateTo(r.toTable, `id.eq.${encodeURIComponent(String(refId))}`);
+            });
+          }
         } else card.innerHTML += '<div class="muted">(none)</div>';
         opts.relatedOutbound.appendChild(card);
       }
@@ -374,6 +634,13 @@ function createDashboard(opts: DashboardOpts) {
         header.textContent = `${r.fromTable}.${r.fromColumn} (${r.total ?? 0})`;
         card.appendChild(header);
         if (r.rows && r.rows.length > 0) card.appendChild(renderMiniTable(r.rows));
+        // Drill-through: clicking navigates to source table filtered by FK = current id
+        card.style.cursor = 'pointer';
+        card.title = `Open ${r.fromTable} where ${r.fromColumn} = ${idStr}`;
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          void navigateTo(r.fromTable, `${r.fromColumn}.eq.${encodeURIComponent(idStr)}`);
+        });
         opts.relatedInbound.appendChild(card);
       }
       if (refs.length === 0) opts.relatedInbound.textContent = '(none)';
@@ -412,6 +679,94 @@ function createDashboard(opts: DashboardOpts) {
       }
     }
   }
+}
+
+// --- Export helpers & lightweight insights ---
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, '_');
+}
+
+function toCSV(cols: string[], rows: Record<string, unknown>[]): string {
+  const esc = (v: unknown): string => {
+    let s: string;
+    if (v == null) s = '';
+    else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+      s = String(v);
+    else s = safeJSONStringify(v);
+    if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  const header = cols.join(',');
+  const body = rows
+    .map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(','))
+    .join('\n');
+  return body ? header + '\n' + body : header + '\n';
+}
+
+function downloadText(filename: string, mime: string, text: string): void {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function safeJSONStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function renderSummary(
+  container: HTMLElement,
+  table: string,
+  cols: string[],
+  rows: Record<string, unknown>[],
+) {
+  if (!container) return;
+  if (!rows || rows.length === 0) {
+    container.textContent = '';
+    return;
+  }
+  // Choose a categorical column to summarize
+  const preferred = ['node_type', 'status', 'type'];
+  let col = preferred.find((c) => cols.includes(c)) ?? '';
+  if (!col) {
+    for (const c of cols) {
+      if (c.endsWith('_id')) continue;
+      const vals = rows.map((r) => r[c]).filter((v) => v != null);
+      const strVals = vals.map((v) => String(v));
+      const uniq = new Set(strVals);
+      if (uniq.size > 1 && uniq.size <= 10) {
+        col = c;
+        break;
+      }
+    }
+  }
+  const total = rows.length;
+  let html = `<span class="muted">${table || 'Rows'}: ${total}</span>`;
+  if (col) {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const k = String(r[col] ?? '');
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    const max = Math.max(1, ...counts.values());
+    html += '<div class="bars">';
+    for (const [k, n] of counts.entries()) {
+      const pct = Math.round((n / max) * 100);
+      html += `<div class="bar"><span>${k || '(none)'}</span><span class="track"><span class="fill" style="width:${pct}%"></span></span><span>${n}</span></div>`;
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
 }
 
 function deriveColumns(rows: Record<string, unknown>[]): string[] {
@@ -906,6 +1261,29 @@ async function renderForeignCell(
     td.textContent = '';
     return;
   }
+  // Basic drill-through handler
+  const attachDrill = (targetTable: string, refId: unknown) => {
+    const idStr = String(refId ?? '');
+    if (!targetTable || !idStr) return;
+    td.style.cursor = 'pointer';
+    td.title = `Open ${targetTable} where id = ${idStr}`;
+    td.addEventListener('click', (e) => {
+      const el = e.target as HTMLElement | null;
+      if (el && el.closest('a')) return; // don't hijack external links
+      e.stopPropagation();
+      const filter =
+        targetTable === 'users' && column !== 'id'
+          ? `id.eq.${encodeURIComponent(idStr)}`
+          : `id.eq.${encodeURIComponent(idStr)}`;
+      // Use global navigate via a custom event to avoid tight coupling
+      try {
+        window.osubq_nav?.(targetTable, filter);
+      } catch {
+        // ignore if not wired
+      }
+    });
+  };
+
   // Special cases
   if (target === 'users') {
     const num = Number.parseInt(String(idVal));
@@ -913,6 +1291,7 @@ async function renderForeignCell(
     if (u) {
       td.innerHTML = '';
       td.appendChild(renderUserChip(u.login, u.avatar_url, u.html_url));
+      attachDrill('users', num);
     } else {
       td.textContent = '';
     }
@@ -931,6 +1310,8 @@ async function renderForeignCell(
       a.rel = 'noreferrer noopener';
       td.innerHTML = '';
       td.appendChild(a);
+      const rid = (row as Record<string, unknown>)['id'];
+      if (rid != null) attachDrill('locations', rid);
     } else td.textContent = '';
     return;
   }
@@ -939,6 +1320,8 @@ async function renderForeignCell(
     if (row) {
       td.innerHTML = '';
       td.appendChild(renderInlineKV(row));
+      const rid = (row as Record<string, unknown>)['id'];
+      if (rid != null) attachDrill('wallets', rid);
     } else td.textContent = '';
     return;
   }
@@ -947,6 +1330,8 @@ async function renderForeignCell(
   if (row) {
     td.innerHTML = '';
     td.appendChild(renderInlineKV(row));
+    const rid = (row as Record<string, unknown>)['id'];
+    if (rid != null) attachDrill(target, rid);
   } else td.textContent = '';
 }
 
