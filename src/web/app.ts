@@ -122,7 +122,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // Saved Views wiring (sidebar)
   const viewList = document.getElementById('viewList') as HTMLUListElement | null;
   const saveViewBtn = document.getElementById('saveViewBtn') as HTMLButtonElement | null;
-  const applyFirstViewBtn = document.getElementById('applyFirstViewBtn') as HTMLButtonElement | null;
+  const applyFirstViewBtn = document.getElementById(
+    'applyFirstViewBtn',
+  ) as HTMLButtonElement | null;
   if (viewList && saveViewBtn) {
     const VIEWS_INDEX_KEY = 'views:index';
     const keyFor = (name: string) => `views:${name}`;
@@ -325,7 +327,8 @@ function createDashboard(opts: DashboardOpts) {
     renderTableList();
 
     // Pick initial table: URL > localStorage(lastTable)
-    const pref = state.table || (typeof lsGet('lastTable') === 'string' ? (lsGet('lastTable') as string) : '');
+    const pref =
+      state.table || (typeof lsGet('lastTable') === 'string' ? (lsGet('lastTable') as string) : '');
     if (pref && state.tables.includes(pref)) await selectTable(pref);
     // Restore sidebar scroll position
     const st = Number.parseInt(String(lsGet('sidebarScroll') ?? '0'));
@@ -433,7 +436,9 @@ function createDashboard(opts: DashboardOpts) {
       if (rows.length > 0) {
         let idx = 0;
         if (state.rowId) {
-          const found = rows.findIndex((r) => String((r as Record<string, unknown>)['id']) === state.rowId);
+          const found = rows.findIndex(
+            (r) => String((r as Record<string, unknown>)['id']) === state.rowId,
+          );
           if (found >= 0) idx = found;
         }
         state.selectedIndex = idx;
@@ -661,13 +666,16 @@ function toCSV(cols: string[], rows: Record<string, unknown>[]): string {
   const esc = (v: unknown): string => {
     let s: string;
     if (v == null) s = '';
-    else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
+    else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+      s = String(v);
     else s = safeJSONStringify(v);
     if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
   const header = cols.join(',');
-  const body = rows.map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(',')).join('\n');
+  const body = rows
+    .map((r) => cols.map((c) => esc((r as Record<string, unknown>)[c])).join(','))
+    .join('\n');
   return body ? header + '\n' + body : header + '\n';
 }
 
@@ -990,9 +998,10 @@ async function renderForeignCell(
       const el = e.target as HTMLElement | null;
       if (el && el.closest('a')) return; // don't hijack external links
       e.stopPropagation();
-      const filter = targetTable === 'users' && column !== 'id'
-        ? `id.eq.${encodeURIComponent(idStr)}`
-        : `id.eq.${encodeURIComponent(idStr)}`;
+      const filter =
+        targetTable === 'users' && column !== 'id'
+          ? `id.eq.${encodeURIComponent(idStr)}`
+          : `id.eq.${encodeURIComponent(idStr)}`;
       // Use global navigate via a custom event to avoid tight coupling
       try {
         window.osubq_nav?.(targetTable, filter);

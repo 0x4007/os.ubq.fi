@@ -167,6 +167,7 @@ gh api /repos/<REPO>/issues/<CHILD_NUMBER> -q .parent_issue_url
 Preferred: GraphQL API (works reliably on github.com). Use these standalone prompts (copy/paste) — no external files.
 
 - Add “blocked by” using GraphQL `addBlockedBy`:
+
 ```
 REPO=<OWNER/REPO>; TARGET=<issue number>; BLOCKER=<issue number>
 issue_id=$(gh issue view -R "$REPO" $TARGET --json id -q .id)
@@ -175,6 +176,7 @@ gh api graphql -f query="mutation { addBlockedBy(input: { issueId: \"$issue_id\"
 ```
 
 - Remove “blocked by” using GraphQL `removeBlockedBy`:
+
 ```
 REPO=<OWNER/REPO>; TARGET=<issue number>; BLOCKER=<issue number>
 issue_id=$(gh issue view -R "$REPO" $TARGET --json id -q .id)
@@ -183,12 +185,14 @@ gh api graphql -f query="mutation { removeBlockedBy(input: { issueId: \"$issue_i
 ```
 
 - Read dependencies via GraphQL:
+
 ```
 OWNER=<OWNER>; NAME=<REPO_NAME>; N=<issue number>
 gh api graphql -f query="query { repository(owner: \"$OWNER\", name: \"$NAME\") { issue(number: $N) { blockedBy(first: 20) { nodes { number title } } blocking(first: 20) { nodes { number title } } } } }"
 ```
 
 Notes
+
 - REST endpoints for issue dependencies exist in docs, but may return 404 depending on token type/feature rollout. Prefer GraphQL for portability.
 
 ### Label Policy
@@ -250,11 +254,9 @@ Out-of-scope signals (do not trigger):
 To ensure the stricter trigger is reliably detectable, follow these steps:
 
 1. Assumption log (1–3 bullets)
-
    - When you create your initial plan/design, add a tiny "Assumptions" snippet to your next message listing key choices that could be corrected (e.g., tool, framework, runtime, permissions). Example: "Assume bundler=esbuild; allow JS in public/; tests offline only."
 
 2. Detect explicit corrections (pattern + change-of-direction)
-
    - After each user reply, scan for contradictions to any logged assumption.
    - Treat as a correction if the message contains any of these near a tool/approach (case-insensitive):
      - Keywords: "don’t", "do not", "avoid", "instead", "rather", "switch", "replace", "drop", "no <X>", "use <Y> not <X>", "prefer <Y>", "must", "require".
@@ -262,15 +264,12 @@ To ensure the stricter trigger is reliably detectable, follow these steps:
    - Heuristic: if you materially change your plan/code in response, mark it as a correction even if wording is soft.
 
 3. Set a one-time session flag
-
    - On first detected correction, set REFLECT_FLAG=true and capture a one-liner: "Assumption corrected: <from> → <to> (<reason if given>)." Ask at most once per task.
 
 4. Conditional final prompt
-
    - At completion, if REFLECT_FLAG is true, ask: "You corrected an earlier assumption I made about <summary>. Would you like me to draft an addendum to the active `AGENTS.md` to capture this rule for future tasks?"
 
 5. Manual overrides
-
    - Always trigger if the user says: "reflect now", "update agents.md", "codify this", or "add this to rules".
 
 6. Guardrails
