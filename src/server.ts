@@ -1,5 +1,4 @@
 import { serveDir } from '@std/http/file-server';
-import '@std/dotenv/load';
 
 const PUBLIC_DIR = Deno.env.get('PUBLIC_DIR') ?? 'public';
 const PORT = Number.parseInt(Deno.env.get('PORT') ?? '8000');
@@ -612,6 +611,12 @@ async function getGitHubUser(
 }
 
 if (import.meta.main) {
+  // Load env variables when running server directly
+  try {
+    await import('@std/dotenv/load');
+  } catch {
+    /* optional */
+  }
   Deno.serve(
     {
       port: PORT,
