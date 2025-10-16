@@ -33,6 +33,20 @@ The Supabase Explorer provides a compact way to browse tables and see how rows r
   - Heuristics need `*_id` to match a table name (`user_id` → `users`).
 - To get exact relationships, install the `public.db_relations` RPC described in `docs/RELATIONS.md` (no UI change required).
 
+## URL State
+
+The explorer keeps its state in the URL so views are deep‑linkable and survive reloads/back/forward. Supported query params:
+
+- `table` — current table name
+- `offset` — current page offset
+- `limit` — page size (default 50)
+- `sort` — column to sort by; click a header to set
+- `desc` — `true` for descending, omitted/false for ascending
+- `filters` — semicolon‑separated list of `column.op.value` (e.g., `location_id.eq.123;name.ilike.%foo%`)
+- `rowId` — selected row id (used to preserve inspector selection)
+
+Filters are also shown as removable chips under the title. Clearing a chip removes the filter and refreshes results.
+
 ## Notes on Expanders
 
 - Expanding a row makes two API calls (`/api/sb/outbound` and `/api/sb/inbound`) for that row ID.

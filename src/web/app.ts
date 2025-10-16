@@ -38,6 +38,7 @@ window.addEventListener('DOMContentLoaded', () => {
     tableSearch: byId<HTMLInputElement>('tableSearch'),
     tableTitle: byId<HTMLHeadingElement>('tableTitle'),
     tableSubtitle: byId<HTMLDivElement>('tableSubtitle'),
+    filterChips: (document.getElementById('filterChips') as HTMLDivElement | null) ?? undefined,
     pageSizeSel: byId<HTMLSelectElement>('pageSize'),
     prevPageBtn: byId<HTMLButtonElement>('prevPage'),
     nextPageBtn: byId<HTMLButtonElement>('nextPage'),
@@ -87,6 +88,7 @@ type DashboardOpts = {
   tableSearch: HTMLInputElement;
   tableTitle: HTMLHeadingElement;
   tableSubtitle: HTMLDivElement;
+  filterChips?: HTMLDivElement;
   pageSizeSel: HTMLSelectElement;
   prevPageBtn: HTMLButtonElement;
   nextPageBtn: HTMLButtonElement;
@@ -102,6 +104,10 @@ function createDashboard(opts: DashboardOpts) {
     table: '',
     limit: 50,
     offset: 0,
+    sort: null as string | null,
+    desc: false,
+    filters: new Map<string, { op: 'eq' | 'ilike'; value: string }>(),
+    rowId: '' as string | null,
     total: 0 as number | null,
     tables: [] as string[], // visible (non-empty) tables
     allTables: [] as string[],
@@ -111,6 +117,8 @@ function createDashboard(opts: DashboardOpts) {
   };
 
   async function init() {
+    // Preload any URL state
+    applyURLState();
     const res = await fetchJSON('/api/sb/tables');
     if (!res.ok) {
       opts.tableSubtitle.textContent = `Failed to load tables: ${res.status}`;
@@ -122,6 +130,15 @@ function createDashboard(opts: DashboardOpts) {
     const nonEmpty = await filterNonEmptyTables(state.allTables);
     state.tables = nonEmpty;
     renderTableList();
+    // If URL preselected a table, select it now
+    if (state.table) {
+      opts.pageSizeSel.value = String(state.limit);
+      await selectTable(state.table);
+    }
+    window.addEventListener('popstate', () => {
+      applyURLState();
+      if (state.table) void selectTable(state.table);
+    });
   }
 
   async function filterNonEmptyTables(tables: string[]): Promise<string[]> {
@@ -167,6 +184,7 @@ function createDashboard(opts: DashboardOpts) {
     opts.objectSummary.classList.add('muted');
     opts.relatedOutbound.innerHTML = '';
     opts.relatedInbound.innerHTML = '';
+    pushURLState();
     renderTableList();
     // load relations mapping for this table (fromColumn -> toTable)
     state.relationsByColumn.clear();
@@ -191,6 +209,13 @@ function createDashboard(opts: DashboardOpts) {
       url.searchParams.set('table', state.table);
       url.searchParams.set('limit', String(state.limit));
       url.searchParams.set('offset', String(state.offset));
+      if (state.sort) url.searchParams.set('order', state.sort);
+      if (state.desc) url.searchParams.set('desc', String(state.desc));
+      for (const [col, f] of state.filters.entries()) {
+        const v = f.value.trim();
+        if (!v) continue;
+        url.searchParams.append('filter', `${col}.${f.op}.${v}`);
+      }
       const res = await fetch(url.toString(), { headers: { accept: 'application/json' } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
@@ -206,6 +231,11 @@ function createDashboard(opts: DashboardOpts) {
         (row) => onRowClick(row),
         state.table,
         state.relationsByColumn,
+        (col) => onHeaderSort(col),
+        state.sort,
+        state.desc,
+        state.filters,
+        (col, op, value) => onFilterChange(col, op as 'eq' | 'ilike', value),
       );
       const rn = rows.length;
       const range = rn > 0 ? `${state.offset + 1}–${state.offset + rn}` : '0';
@@ -215,9 +245,16 @@ function createDashboard(opts: DashboardOpts) {
       opts.nextPageBtn.disabled =
         state.total != null ? state.offset + rn >= state.total : rn < state.limit;
 
-      // Auto-select the first row so related data loads without extra clicks
+      // Auto-select preserved row if available; else first
       if (rows.length > 0) {
-        await onRowClick(rows[0] as Record<string, unknown>, 0);
+        let idx = 0;
+        if (state.rowId) {
+          const found = rows.findIndex(
+            (r) => String((r as Record<string, unknown>)['id']) === String(state.rowId),
+          );
+          if (found >= 0) idx = found;
+        }
+        await onRowClick(rows[idx] as Record<string, unknown>, idx);
       } else {
         // Clear inspector if no rows
         opts.inspectorTitle.textContent = `${state.table} · Object`;
@@ -226,6 +263,7 @@ function createDashboard(opts: DashboardOpts) {
         opts.relatedOutbound.innerHTML = '';
         opts.relatedInbound.innerHTML = '';
       }
+      renderFilterChips();
     } catch (err) {
       opts.tableSubtitle.textContent = `Query error: ${String(err)}`;
       opts.grid.innerHTML = '';
@@ -240,16 +278,19 @@ function createDashboard(opts: DashboardOpts) {
 
   opts.prevPageBtn.addEventListener('click', () => {
     state.offset = Math.max(0, state.offset - state.limit);
+    pushURLState();
     void loadPage(false);
   });
   opts.nextPageBtn.addEventListener('click', () => {
     state.offset += state.limit;
+    pushURLState();
     void loadPage(false);
   });
   opts.pageSizeSel.addEventListener('change', () => {
     const v = Number.parseInt(opts.pageSizeSel.value);
     if (Number.isFinite(v)) state.limit = v;
     state.offset = 0;
+    pushURLState();
     void loadPage(true);
   });
   opts.tableSearch.addEventListener('input', renderTableList);
@@ -257,6 +298,11 @@ function createDashboard(opts: DashboardOpts) {
   void init();
 
   async function onRowClick(row: Record<string, unknown>, _idx: number) {
+    const idVal = row['id'];
+    if (idVal != null) {
+      state.rowId = String(idVal);
+      pushURLState();
+    }
     opts.inspectorTitle.textContent = `${state.table} · Object`;
     const summary = renderKeyValues(row);
     opts.objectSummary.classList.remove('muted');
@@ -330,6 +376,98 @@ function createDashboard(opts: DashboardOpts) {
       opts.relatedInbound.textContent = `Failed: ${inbound.status}`;
     }
   }
+
+  function onHeaderSort(column: string) {
+    if (state.sort === column) state.desc = !state.desc;
+    else {
+      state.sort = column;
+      state.desc = false;
+    }
+    state.offset = 0;
+    pushURLState();
+    void loadPage(true);
+  }
+
+  function onFilterChange(col: string, op: 'eq' | 'ilike', value: string) {
+    const v = value.trim();
+    if (!v) state.filters.delete(col);
+    else state.filters.set(col, { op, value: v });
+    state.offset = 0;
+    pushURLState();
+    void loadPage(true);
+  }
+
+  function parseFiltersParam(s: string | null): Map<string, { op: 'eq' | 'ilike'; value: string }> {
+    const out = new Map<string, { op: 'eq' | 'ilike'; value: string }>();
+    if (!s) return out;
+    const parts = s
+      .split(';')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    for (const p of parts) {
+      const [col, op, ...rest] = p.split('.');
+      const value = rest.join('.');
+      if (!col || !op || !value) continue;
+      const o = op === 'ilike' ? 'ilike' : 'eq';
+      out.set(col, { op: o, value });
+    }
+    return out;
+  }
+
+  function stringifyFilters(): string {
+    const pieces: string[] = [];
+    for (const [col, f] of state.filters.entries()) {
+      if (!f.value.trim()) continue;
+      pieces.push(`${col}.${f.op}.${f.value}`);
+    }
+    return pieces.join(';');
+  }
+
+  function applyURLState() {
+    const sp = new URLSearchParams(location.search);
+    state.table = sp.get('table') ?? state.table;
+    const limit = Number.parseInt(sp.get('limit') ?? '');
+    const offset = Number.parseInt(sp.get('offset') ?? '');
+    if (Number.isFinite(limit)) state.limit = limit;
+    if (Number.isFinite(offset)) state.offset = offset;
+    state.sort = sp.get('sort');
+    state.desc = (sp.get('desc') ?? 'false').toLowerCase() === 'true';
+    state.rowId = sp.get('rowId');
+    state.filters = parseFiltersParam(sp.get('filters'));
+  }
+
+  function pushURLState() {
+    const sp = new URLSearchParams();
+    if (state.table) sp.set('table', state.table);
+    sp.set('limit', String(state.limit));
+    sp.set('offset', String(state.offset));
+    if (state.sort) sp.set('sort', state.sort);
+    if (state.desc) sp.set('desc', String(state.desc));
+    if (state.rowId) sp.set('rowId', state.rowId);
+    const filtersStr = stringifyFilters();
+    if (filtersStr) sp.set('filters', filtersStr);
+    const newUrl = `${location.pathname}?${sp.toString()}`;
+    history.pushState({}, '', newUrl);
+  }
+
+  function renderFilterChips() {
+    if (!opts.filterChips) return;
+    opts.filterChips.innerHTML = '';
+    for (const [col, f] of state.filters.entries()) {
+      if (!f.value.trim()) continue;
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = `${col} ${f.op} ${f.value}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '×';
+      btn.style.marginLeft = '0.35rem';
+      btn.addEventListener('click', () => onFilterChange(col, f.op, ''));
+      chip.appendChild(btn);
+      opts.filterChips.appendChild(chip);
+      opts.filterChips.appendChild(document.createTextNode(' '));
+    }
+  }
 }
 
 function deriveColumns(rows: Record<string, unknown>[]): string[] {
@@ -351,6 +489,11 @@ function renderGrid(
   onRowClick: (row: Record<string, unknown>, idx: number) => void,
   tableName?: string,
   relations?: Map<string, string>,
+  onHeaderClick?: (column: string) => void,
+  currentSort?: string | null,
+  currentDesc?: boolean,
+  filterState?: Map<string, { op: 'eq' | 'ilike'; value: string }>,
+  onFilterChange?: (col: string, op: 'eq' | 'ilike', value: string) => void,
 ) {
   tableEl.innerHTML = '';
   if (rows.length === 0) return;
@@ -364,10 +507,58 @@ function renderGrid(
   trh.appendChild(thExp);
   for (const c of cols) {
     const th = document.createElement('th');
-    th.textContent = c.endsWith('_id') ? friendlyLabel(c, '') : c;
+    const label = c.endsWith('_id') ? friendlyLabel(c, '') : c;
+    const isSort = currentSort === c;
+    th.textContent = isSort ? `${label} ${currentDesc ? '▼' : '▲'}` : label;
+    if (onHeaderClick) {
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => onHeaderClick(c));
+    }
     trh.appendChild(th);
   }
   thead.appendChild(trh);
+  if (onFilterChange) {
+    const trf = document.createElement('tr');
+    const td0 = document.createElement('th');
+    td0.textContent = '';
+    trf.appendChild(td0);
+    for (const c of cols) {
+      const th = document.createElement('th');
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.gap = '0.25rem';
+      const sel = document.createElement('select');
+      sel.innerHTML = '<option value="ilike">ilike</option><option value="eq">eq</option>';
+      sel.style.background = 'transparent';
+      sel.style.color = 'inherit';
+      sel.style.border = '1px solid #333';
+      sel.style.borderRadius = '6px';
+      sel.style.padding = '0.1rem 0.25rem';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = 'filter…';
+      inp.className = 'input';
+      inp.style.padding = '0.2rem 0.3rem';
+      inp.style.fontSize = '0.8rem';
+      inp.style.height = '1.6rem';
+      const f = filterState?.get(c);
+      if (f) {
+        sel.value = f.op;
+        inp.value = f.value;
+      }
+      sel.addEventListener('change', () =>
+        onFilterChange(c, sel.value as 'eq' | 'ilike', inp.value),
+      );
+      inp.addEventListener('change', () =>
+        onFilterChange(c, sel.value as 'eq' | 'ilike', inp.value),
+      );
+      wrap.appendChild(sel);
+      wrap.appendChild(inp);
+      th.appendChild(wrap);
+      trf.appendChild(th);
+    }
+    thead.appendChild(trf);
+  }
   tableEl.appendChild(thead);
 
   const tbody = document.createElement('tbody');
