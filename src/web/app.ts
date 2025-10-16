@@ -388,10 +388,10 @@ function createDashboard(opts: DashboardOpts) {
     } catch {
       // ignore relation load error; grid will degrade to raw values
     }
-    await loadPage(true);
+    await loadPage({ reset: true });
   }
 
-  async function loadPage(reset = false) {
+  async function loadPage({ reset = false }: { reset?: boolean } = {}) {
     if (!state.table) return;
     if (reset) state.offset = 0;
     setBusy(true);
@@ -435,7 +435,7 @@ function createDashboard(opts: DashboardOpts) {
           if (found >= 0) idx = found;
         }
         state.selectedIndex = idx;
-        await onRowClick(rows[idx] as Record<string, unknown>, idx);
+        await onRowClick(rows[idx], idx);
       } else {
         // Clear inspector if no rows
         opts.inspectorTitle.textContent = `${state.table} · Object`;
@@ -461,19 +461,19 @@ function createDashboard(opts: DashboardOpts) {
   opts.prevPageBtn.addEventListener('click', () => {
     state.offset = Math.max(0, state.offset - state.limit);
     pushURL(true);
-    void loadPage(false);
+    void loadPage();
   });
   opts.nextPageBtn.addEventListener('click', () => {
     state.offset += state.limit;
     pushURL(true);
-    void loadPage(false);
+    void loadPage();
   });
   opts.pageSizeSel.addEventListener('change', () => {
     const v = Number.parseInt(opts.pageSizeSel.value);
     if (Number.isFinite(v)) state.limit = v;
     state.offset = 0;
     pushURL(true);
-    void loadPage(true);
+    void loadPage({ reset: true });
   });
   opts.tableSearch.addEventListener('input', renderTableList);
   opts.tableList.addEventListener('scroll', () => {
