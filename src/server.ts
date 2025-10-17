@@ -81,14 +81,11 @@ export async function handler(req: Request): Promise<Response> {
         if (offset > 0) qs.set('offset', String(offset));
         if (order) qs.set('order', `${order}.${desc ? 'desc' : 'asc'}`);
 
-        // Optional filters: allow multiple `filter` params with pattern `<col>.<op>.<val>`
-        // Example: filter=user_id.eq.123 → ...?user_id=eq.123
-        const filters = url.searchParams.getAll('filter');
-        for (const f of filters) {
+        // Map repeated `filter=<col>.<op>.<val>` to PostgREST query params
+        for (const f of url.searchParams.getAll('filter')) {
           const [col, op, ...rest] = f.split('.');
           const val = rest.join('.');
           if (!col || !op || !val) continue;
-          // Basic allowlist of ops; default to eq
           const allowed = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'ilike', 'like']);
           const useOp = allowed.has(op) ? op : 'eq';
           qs.append(col, `${useOp}.${val}`);

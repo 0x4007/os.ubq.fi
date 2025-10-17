@@ -107,109 +107,6 @@ nohup deno task dev > logs/dev.log 2>&1 & echo $! > logs/dev.pid
 - Keep patches surgical; avoid unrelated refactors. Prefer `deno task` for all workflows.
 - If unsure, verify with a quick search, then run `deno task lint`, `fmt`, `knip`, and `test` before submitting.
 
-## Agent Behavior Addendum — GitHub Issues & Sprints
-
-This project manages work via GitHub issues and sub‑issues. Keep specs concise and avoid redundancy.
-
-### Hard Rules
-
-- Do not create or apply sprint labels. Do not apply pricing labels.
-- Do not prefix titles with sprint codes (e.g., `[S1]`). Titles must be plain and descriptive.
-- Do not add tasklists to parent issues; sub‑issues in the UI are the source of truth.
-- Use real newlines in bodies (never literal `\n`).
-
-### Minimal Spec Format (child issues)
-
-- Title: descriptive (e.g., `Sorting: clickable headers with asc/desc`).
-- Labels: apply exactly one time label (e.g., `Time: <2 Hours`) and one priority label (e.g., `Priority: 3 (High)`).
-- Body:
-  - First paragraph: one or two sentences describing the change.
-  - `Acceptance:` section with short bullet criteria.
-  - `Files:` section with bullet list of paths (optionally with starting line), e.g., `- src/web/app.ts:1`.
-
-### Sprint Parent Issues
-
-- Keep the body to the sprint spec only. No tasklists. No title prefixes.
-- Link children using sub‑issues only (UI shows them automatically).
-
-### Parent↔Child Linking (Sub‑issues)
-
-- Use REST `sub_issues` endpoints (underscore). The child must be referenced by its REST numeric `id`.
-
-List children:
-
-```
-gh api /repos/<REPO>/issues/<PARENT_NUMBER>/sub_issues -q .[].number
-```
-
-Add child:
-
-```
-child_num=16
-rest_id=$(gh api /repos/<REPO>/issues/$child_num -q .id)
-gh api -X POST -H "Accept: application/vnd.github+json" \
-  /repos/<REPO>/issues/<PARENT_NUMBER>/sub_issues \
-  -F sub_issue_id=$rest_id
-```
-
-Verify parent of a child:
-
-```
-gh api /repos/<REPO>/issues/<CHILD_NUMBER> -q .parent_issue_url
-```
-
-### Dependencies (optional)
-
-- If needed, use REST `blocked_by` to express dependencies. Avoid tasklists for dependencies.
-
-### Issue Dependencies (blocked_by / blocking)
-
-Preferred: GraphQL API (works reliably on github.com). Use these standalone prompts (copy/paste) — no external files.
-
-- Add “blocked by” using GraphQL `addBlockedBy`:
-
-```
-REPO=<OWNER/REPO>; TARGET=<issue number>; BLOCKER=<issue number>
-issue_id=$(gh issue view -R "$REPO" $TARGET --json id -q .id)
-blocker_id=$(gh issue view -R "$REPO" $BLOCKER --json id -q .id)
-gh api graphql -f query="mutation { addBlockedBy(input: { issueId: \"$issue_id\", blockingIssueId: \"$blocker_id\" }) { issue { number title } blockingIssue { number title } } }"
-```
-
-- Remove “blocked by” using GraphQL `removeBlockedBy`:
-
-```
-REPO=<OWNER/REPO>; TARGET=<issue number>; BLOCKER=<issue number>
-issue_id=$(gh issue view -R "$REPO" $TARGET --json id -q .id)
-blocker_id=$(gh issue view -R "$REPO" $BLOCKER --json id -q .id)
-gh api graphql -f query="mutation { removeBlockedBy(input: { issueId: \"$issue_id\", blockingIssueId: \"$blocker_id\" }) { issue { number title } } }"
-```
-
-- Read dependencies via GraphQL:
-
-```
-OWNER=<OWNER>; NAME=<REPO_NAME>; N=<issue number>
-gh api graphql -f query="query { repository(owner: \"$OWNER\", name: \"$NAME\") { issue(number: $N) { blockedBy(first: 20) { nodes { number title } } blocking(first: 20) { nodes { number title } } } } }"
-```
-
-Notes
-
-- REST endpoints for issue dependencies exist in docs, but may return 404 depending on token type/feature rollout. Prefer GraphQL for portability.
-
-### Label Policy
-
-- Do not create custom labels; read existing labels and choose from them.
-- Allowed: exactly one time label (`Time: …`) and one priority label (`Priority: …`) per child issue.
-- Disallowed: sprint labels, price labels, and ad‑hoc custom labels unless explicitly requested.
-- Parents (sprint umbrella issues): do not set any time label to avoid double counting.
-
-### Time Estimate Policy (Aggressive Defaults)
-
-- Docs and small copy: `Time: <15 Minutes` (use LLM-assisted drafting and quick edits).
-- Minor UI wiring (single header behavior, simple handler, or small filter): `Time: <1 Hour`.
-- Moderate client work (URL state, drill-through, saved views, CSV export): `Time: <2 Hours`.
-- Heavier but contained UI work (print stylesheet, lightweight charts, design tokens, a11y/keyboard, simple virtualization): `Time: <4 Hours`.
-- Re-evaluate if scope expands; prefer aggressive estimates by default and adjust upward only with justification in the issue body.
-
 # Self-Improving Reflection
 
 (Reference: `codex resume 0199dcc0-678b-7bc1-a36e-a623a825bcd4`)
@@ -254,9 +151,11 @@ Out-of-scope signals (do not trigger):
 To ensure the stricter trigger is reliably detectable, follow these steps:
 
 1. Assumption log (1–3 bullets)
+
    - When you create your initial plan/design, add a tiny "Assumptions" snippet to your next message listing key choices that could be corrected (e.g., tool, framework, runtime, permissions). Example: "Assume bundler=esbuild; allow JS in public/; tests offline only."
 
 2. Detect explicit corrections (pattern + change-of-direction)
+
    - After each user reply, scan for contradictions to any logged assumption.
    - Treat as a correction if the message contains any of these near a tool/approach (case-insensitive):
      - Keywords: "don’t", "do not", "avoid", "instead", "rather", "switch", "replace", "drop", "no <X>", "use <Y> not <X>", "prefer <Y>", "must", "require".
@@ -264,12 +163,15 @@ To ensure the stricter trigger is reliably detectable, follow these steps:
    - Heuristic: if you materially change your plan/code in response, mark it as a correction even if wording is soft.
 
 3. Set a one-time session flag
+
    - On first detected correction, set REFLECT_FLAG=true and capture a one-liner: "Assumption corrected: <from> → <to> (<reason if given>)." Ask at most once per task.
 
 4. Conditional final prompt
+
    - At completion, if REFLECT_FLAG is true, ask: "You corrected an earlier assumption I made about <summary>. Would you like me to draft an addendum to the active `AGENTS.md` to capture this rule for future tasks?"
 
 5. Manual overrides
+
    - Always trigger if the user says: "reflect now", "update agents.md", "codify this", or "add this to rules".
 
 6. Guardrails

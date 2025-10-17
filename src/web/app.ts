@@ -34,17 +34,28 @@ function parseURLState(): {
   table: string;
   limit: number | null;
   offset: number | null;
-  filter: string | null;
+  filter: string | null; // legacy single filter
+  filters: string[]; // semicolon-delimited list in URL
+  sort: string | null;
+  desc: boolean;
   rowId: string | null;
 } {
   const url = new URL(location.href);
   const limit = url.searchParams.get('limit');
   const offset = url.searchParams.get('offset');
+  const filtersRaw = url.searchParams.get('filters') ?? '';
+  const list = filtersRaw
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   return {
     table: url.searchParams.get('table') ?? '',
     limit: limit ? Number.parseInt(limit) : null,
     offset: offset ? Number.parseInt(offset) : null,
     filter: url.searchParams.get('filter'),
+    filters: list,
+    sort: url.searchParams.get('sort'),
+    desc: (url.searchParams.get('desc') ?? 'false').toLowerCase() === 'true',
     rowId: url.searchParams.get('rowId'),
   };
 }
@@ -53,14 +64,20 @@ function buildURL(
   table: string,
   limit: number,
   offset: number,
-  filter: string | null,
+  filter: string | null, // legacy single filter
   rowId: string | null,
+  sort: string | null,
+  desc: boolean,
+  filters: string[],
 ): string {
   const u = new URL(location.pathname, location.origin);
   if (table) u.searchParams.set('table', table);
   if (limit) u.searchParams.set('limit', String(limit));
   if (offset) u.searchParams.set('offset', String(offset));
   if (filter) u.searchParams.set('filter', filter);
+  if (filters && filters.length > 0) u.searchParams.set('filters', filters.join(';'));
+  if (sort) u.searchParams.set('sort', sort);
+  if (desc) u.searchParams.set('desc', String(!!desc));
   if (rowId) u.searchParams.set('rowId', rowId);
   return u.toString();
 }
@@ -105,6 +122,7 @@ window.addEventListener('DOMContentLoaded', () => {
     tableSearch: byId<HTMLInputElement>('tableSearch'),
     tableTitle: byId<HTMLHeadingElement>('tableTitle'),
     tableSubtitle: byId<HTMLDivElement>('tableSubtitle'),
+    filterChips: byId<HTMLDivElement>('filterChips'),
     pageSizeSel: byId<HTMLSelectElement>('pageSize'),
     prevPageBtn: byId<HTMLButtonElement>('prevPage'),
     nextPageBtn: byId<HTMLButtonElement>('nextPage'),
@@ -281,6 +299,7 @@ type DashboardOpts = {
   tableSearch: HTMLInputElement;
   tableTitle: HTMLHeadingElement;
   tableSubtitle: HTMLDivElement;
+  filterChips: HTMLDivElement;
   pageSizeSel: HTMLSelectElement;
   prevPageBtn: HTMLButtonElement;
   nextPageBtn: HTMLButtonElement;
@@ -299,7 +318,10 @@ function createDashboard(opts: DashboardOpts) {
     table: '',
     limit: 50,
     offset: 0,
-    filter: null as string | null,
+    filter: null as string | null, // legacy single filter support
+    filters: [] as string[], // multiple filters as col.op.val
+    sort: null as string | null,
+    desc: false,
     rowId: null as string | null,
     total: 0 as number | null,
     tables: [] as string[], // visible (non-empty) tables
@@ -405,6 +427,12 @@ function createDashboard(opts: DashboardOpts) {
       url.searchParams.set('table', state.table);
       url.searchParams.set('limit', String(state.limit));
       url.searchParams.set('offset', String(state.offset));
+      // sorting
+      if (state.sort) url.searchParams.set('order', state.sort);
+      url.searchParams.set('desc', String(!!state.desc));
+      // filters: map from URL state to repeated server params
+      const list = Array.isArray(state.filters) ? state.filters : [];
+      for (const f of list) url.searchParams.append('filter', f);
       if (state.filter) url.searchParams.append('filter', state.filter);
       const res = await fetch(url.toString(), { headers: { accept: 'application/json' } });
       const data = await res.json();
@@ -421,7 +449,12 @@ function createDashboard(opts: DashboardOpts) {
         (row, idx) => onRowClick(row, idx),
         state.table,
         state.relationsByColumn,
+        state.sort,
+        state.desc,
+        (col) => onSortColumn(col),
       );
+      // Refresh filters UI since available columns may change per table
+      renderFilterUI();
       // Update lightweight summary/insights
       renderSummary(opts.summaryEl, state.table, cols, rows);
       const rn = rows.length;
@@ -514,7 +547,16 @@ function createDashboard(opts: DashboardOpts) {
 
   // --- URL state ---
   function pushURL(push = false) {
-    const url = buildURL(state.table, state.limit, state.offset, state.filter, state.rowId);
+    const url = buildURL(
+      state.table,
+      state.limit,
+      state.offset,
+      state.filter,
+      state.rowId,
+      state.sort,
+      state.desc,
+      state.filters,
+    );
     if (push) history.pushState({}, '', url);
     else history.replaceState({}, '', url);
   }
@@ -524,6 +566,9 @@ function createDashboard(opts: DashboardOpts) {
     if (Number.isFinite(u.limit ?? NaN) && u.limit) state.limit = u.limit;
     if (Number.isFinite(u.offset ?? NaN) && u.offset) state.offset = u.offset;
     state.filter = u.filter;
+    state.filters = u.filters && u.filters.length > 0 ? u.filters : u.filter ? [u.filter] : [];
+    state.sort = u.sort;
+    state.desc = u.desc;
     state.rowId = u.rowId;
     // reflect page size UI
     const v = String(state.limit);
@@ -540,7 +585,8 @@ function createDashboard(opts: DashboardOpts) {
   // Drill-through navigation helper
   async function navigateTo(table: string, filter: string) {
     state.table = table;
-    state.filter = filter;
+    state.filter = filter; // legacy for compatibility
+    state.filters = [filter];
     state.offset = 0;
     state.rowId = null;
     pushURL(true);
@@ -562,6 +608,83 @@ function createDashboard(opts: DashboardOpts) {
   window.osubq_nav = (t, f) => {
     void navigateTo(t, f);
   };
+
+  function onSortColumn(col: string) {
+    if (state.sort === col) state.desc = !state.desc;
+    else {
+      state.sort = col;
+      state.desc = false;
+    }
+    pushURL(true);
+    void loadPage();
+  }
+
+  function renderFilterUI() {
+    const host = opts.filterChips;
+    host.innerHTML = '';
+    // Builder controls
+    const builder = document.createElement('div');
+    builder.className = 'filter-builder';
+    const colSel = document.createElement('select');
+    const opSel = document.createElement('select');
+    const valInput = document.createElement('input');
+    valInput.placeholder = 'value';
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'Add Filter';
+    // populate columns
+    for (const c of state.lastCols) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      colSel.appendChild(opt);
+    }
+    // operators
+    for (const op of ['eq', 'ilike']) {
+      const o = document.createElement('option');
+      o.value = op;
+      o.textContent = op;
+      opSel.appendChild(o);
+    }
+    addBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const col = colSel.value;
+      const op = opSel.value;
+      const val = valInput.value.trim();
+      if (!col || !op || !val) return;
+      const f = `${col}.${op}.${val}`;
+      if (!state.filters.includes(f)) state.filters.push(f);
+      state.offset = 0;
+      pushURL(true);
+      void loadPage({ reset: true });
+    });
+    builder.appendChild(colSel);
+    builder.appendChild(opSel);
+    builder.appendChild(valInput);
+    builder.appendChild(addBtn);
+
+    host.appendChild(builder);
+
+    // Chips
+    for (const f of state.filters) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      const [col, op, ...rest] = f.split('.');
+      const val = rest.join('.') || '';
+      chip.textContent = `${col} ${op} ${val}`;
+      const x = document.createElement('button');
+      x.textContent = '×';
+      x.setAttribute('aria-label', `Remove filter ${col} ${op} ${val}`);
+      x.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.filters = state.filters.filter((it) => it !== f);
+        state.offset = 0;
+        pushURL(true);
+        void loadPage({ reset: true });
+      });
+      chip.appendChild(x);
+      host.appendChild(chip);
+    }
+  }
 
   async function onRowClick(row: Record<string, unknown>, _idx: number) {
     opts.inspectorTitle.textContent = `${state.table} · Object`;
@@ -763,6 +886,9 @@ function renderGrid(
   onRowClick: (row: Record<string, unknown>, idx: number) => void,
   tableName?: string,
   relations?: Map<string, string>,
+  currentSort?: string | null,
+  currentDesc?: boolean,
+  onSort?: (col: string) => void,
 ) {
   tableEl.innerHTML = '';
   if (rows.length === 0) return;
@@ -776,7 +902,26 @@ function renderGrid(
   trh.appendChild(thExp);
   for (const c of cols) {
     const th = document.createElement('th');
-    th.textContent = c.endsWith('_id') ? friendlyLabel(c, '') : c;
+    const label = c.endsWith('_id') ? friendlyLabel(c, '') : c;
+    const isSorted = currentSort === c;
+    th.classList.add('sortable');
+    th.style.cursor = 'pointer';
+    th.title = `Sort by ${label}`;
+    th.textContent = label + (isSorted ? (currentDesc ? ' ▼' : ' ▲') : '');
+    if (isSorted) th.classList.add(currentDesc ? 'sorted-desc' : 'sorted-asc');
+    if (onSort) {
+      th.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onSort(c);
+      });
+      th.tabIndex = 0;
+      th.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSort(c);
+        }
+      });
+    }
     trh.appendChild(th);
   }
   thead.appendChild(trh);
