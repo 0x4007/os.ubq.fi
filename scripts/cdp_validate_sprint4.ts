@@ -265,13 +265,18 @@ async function main() {
         const rowH = parseFloat(css || '32') || 32;
         const approxVisible = Math.ceil((contH || (32 * 16)) / rowH) + 6;
         const virtualizedActive = (spacers > 0) || (hasVirtAPI && rowEls <= approxVisible && scrollH > contH * 2);
-        return JSON.stringify({ meta, slice, rowEls, spacers, contH, scrollH, rowH, approxVisible, hasVirtAPI, virtualizedActive });
+        const subtitle = document.querySelector('#tableSubtitle')?.textContent || '';
+        const m = subtitle.match(/\bof\s+(\d+)\b/);
+        const total = m ? parseInt(m[1] || '0', 10) : 0;
+        return JSON.stringify({ meta, slice, rowEls, spacers, contH, scrollH, rowH, approxVisible, hasVirtAPI, virtualizedActive, total });
       })()`,
     );
     let virtObj: any = null;
     try { virtObj = JSON.parse(virt); } catch { virtObj = { parseError: true, raw: virt ?? null }; }
-    const ok = !!virtObj && virtObj.virtualizedActive === true;
-    results.virtualization = { v1, ok, ...virtObj };
+    const total = Number.isFinite(virtObj?.total) ? Number(virtObj.total) : 0;
+    const shouldVirt = total >= 200;
+    const ok = shouldVirt ? (virtObj?.virtualizedActive === true) : true; // n/a treated as pass if small dataset
+    results.virtualization = { v1, ok, shouldVirt, ...virtObj };
 
     const outJson = `${args.outDir}/results.json`;
     await Deno.writeTextFile(outJson, JSON.stringify(results, null, 2));

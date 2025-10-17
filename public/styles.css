@@ -106,7 +106,8 @@ label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 .sidebar { border: 1px solid var(--border); border-radius: var(--radius-3); padding: var(--space-4); height: fit-content; position: sticky; top: var(--space-4); align-self: start; background: var(--panel); }
 .content { border: 1px solid var(--border); border-radius: var(--radius-3); padding: var(--space-4); min-width: 0; background: var(--panel); }
 .inspector { border: 1px solid var(--border); border-radius: var(--radius-3); padding: var(--space-4); height: fit-content; position: sticky; top: var(--space-4); align-self: start; min-width: 0; background: var(--panel); }
-.content-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.content-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.content-header .toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; min-width: 0; }
 .toolbar { display: flex; gap: 0.5rem; align-items: center; }
 .toolbar .spacer { flex: 1 1 auto; }
 .toolbar select { padding: 0.35rem 0.5rem; border-radius: 6px; background: transparent; color: inherit; border: 1px solid #333; }
