@@ -137,6 +137,22 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   createDashboard(opts);
 
+  // Sidebar search: clear button
+  try {
+    const clearBtn = document.getElementById('clearTableSearch') as HTMLButtonElement | null;
+    if (clearBtn && opts.tableSearch) {
+      const syncClearVis = () => {
+        clearBtn.classList.toggle('hidden', opts.tableSearch.value.trim() === '');
+      };
+      syncClearVis();
+      opts.tableSearch.addEventListener('input', syncClearVis);
+      clearBtn.addEventListener('click', () => {
+        opts.tableSearch.value = '';
+        opts.tableSearch.dispatchEvent(new Event('input'));
+      });
+    }
+  } catch { /* ignore */ }
+
   // Saved Views wiring (sidebar)
   const viewList = document.getElementById('viewList') as HTMLUListElement | null;
   const saveViewBtn = document.getElementById('saveViewBtn') as HTMLButtonElement | null;
@@ -247,6 +263,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Theme toggle
   if (themeToggle) {
+    const setIcon = () => {
+      const mode = document.documentElement.getAttribute('data-theme');
+      // icon reflects current theme
+      themeToggle.textContent = mode === 'light' ? '🌞' : '🌙';
+      themeToggle.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+      themeToggle.title = 'Toggle theme';
+    };
+    setIcon();
     themeToggle.addEventListener('click', () => {
       const el = document.documentElement;
       const isLight = el.getAttribute('data-theme') === 'light';
@@ -256,8 +280,9 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         localStorage.setItem('theme', next || 'dark');
       } catch {
-        // ignore
+        /* ignore */
       }
+      setIcon();
     });
   }
 
@@ -398,7 +423,7 @@ function createDashboard(opts: DashboardOpts) {
     opts.tableSubtitle.textContent = '';
     opts.inspectorTitle.textContent = 'Object';
     opts.objectSummary.textContent = '(select a row)';
-    opts.objectSummary.classList.add('muted');
+    opts.objectSummary.classList.add('muted', 'empty');
     opts.relatedOutbound.innerHTML = '';
     opts.relatedInbound.innerHTML = '';
     renderTableList();
@@ -748,7 +773,7 @@ function createDashboard(opts: DashboardOpts) {
     try { highlightSelectedRow(); scrollToSelected(); } catch { /* ignore */ }
     opts.inspectorTitle.textContent = `${state.table} · Object`;
     const summary = renderKeyValues(row);
-    opts.objectSummary.classList.remove('muted');
+    opts.objectSummary.classList.remove('muted', 'empty');
     opts.objectSummary.innerHTML = '';
     opts.objectSummary.appendChild(summary);
     // Enrich values: replace IDs with labels/objects
@@ -758,6 +783,10 @@ function createDashboard(opts: DashboardOpts) {
     const val = row['id'];
     opts.relatedOutbound.innerHTML = '';
     opts.relatedInbound.innerHTML = '';
+    opts.relatedOutbound.classList.remove('empty');
+    opts.relatedInbound.classList.remove('empty');
+    opts.relatedOutbound.textContent = 'Loading…';
+    opts.relatedInbound.textContent = 'Loading…';
     if (val == null) {
       opts.relatedOutbound.textContent = '(row has no id field)';
       return;
@@ -797,7 +826,7 @@ function createDashboard(opts: DashboardOpts) {
         } else card.innerHTML += '<div class="muted">(none)</div>';
         opts.relatedOutbound.appendChild(card);
       }
-      if (refs.length === 0) opts.relatedOutbound.textContent = '(none)';
+      if (refs.length === 0) { opts.relatedOutbound.textContent = '(none)'; opts.relatedOutbound.classList.add('empty'); }
     } else {
       opts.relatedOutbound.textContent = `Failed: ${outbound.status}`;
     }
@@ -831,7 +860,7 @@ function createDashboard(opts: DashboardOpts) {
         });
         opts.relatedInbound.appendChild(card);
       }
-      if (refs.length === 0) opts.relatedInbound.textContent = '(none)';
+      if (refs.length === 0) { opts.relatedInbound.textContent = '(none)'; opts.relatedInbound.classList.add('empty'); }
     } else {
       opts.relatedInbound.textContent = `Failed: ${inbound.status}`;
     }
@@ -953,6 +982,25 @@ function renderGrid(
   tableEl.innerHTML = '';
   if (rows.length === 0) return;
 
+  // Determine numeric columns for alignment (ignore *_id)
+  const numericCols = new Set<string>();
+  const sampleN = Math.min(rows.length, 100);
+  for (const c of cols) {
+    if (c.endsWith('_id') || c === 'id') continue;
+    let seen = 0, numeric = 0;
+    for (let i = 0; i < sampleN; i++) {
+      const v = rows[i]?.[c];
+      if (v == null) continue;
+      seen++;
+      if (typeof v === 'number' && Number.isFinite(v)) numeric++;
+      else if (typeof v === 'string') {
+        const s = v.trim();
+        if (s !== '' && !Number.isNaN(Number(s))) numeric++;
+      }
+    }
+    if (seen > 0 && numeric / seen >= 0.8) numericCols.add(c);
+  }
+
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
   // Expander column header
@@ -966,25 +1014,29 @@ function renderGrid(
     const label = c.endsWith('_id') ? friendlyLabel(c, '') : c;
     const isSorted = currentSort === c;
     th.classList.add('sortable');
-    th.style.cursor = 'pointer';
-    th.title = `Sort by ${label}`;
-    th.textContent = label + (isSorted ? (currentDesc ? ' ▼' : ' ▲') : '');
     th.setAttribute('role', 'columnheader');
     th.setAttribute('scope', 'col');
-    if (isSorted) th.classList.add(currentDesc ? 'sorted-desc' : 'sorted-asc');
+    th.setAttribute('aria-sort', isSorted ? (currentDesc ? 'descending' : 'ascending') : 'none');
+
+    const sortBtn = document.createElement('button');
+    sortBtn.type = 'button';
+    sortBtn.className = 'th-btn';
+    sortBtn.title = `Sort by ${label}`;
+    sortBtn.innerHTML = `${label}<span class="sort-icon" aria-hidden="true">${isSorted ? (currentDesc ? '▾' : '▴') : ''}</span>`;
+    if (numericCols.has(c)) th.classList.add('num');
     if (onSort) {
-      th.addEventListener('click', (e) => {
+      sortBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         onSort(c);
       });
-      th.tabIndex = 0;
-      th.addEventListener('keydown', (e) => {
+      sortBtn.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onSort(c);
         }
       });
     }
+    th.appendChild(sortBtn);
     trh.appendChild(th);
   }
   thead.appendChild(trh);
@@ -995,6 +1047,12 @@ function renderGrid(
 
   // --- Virtualized rendering ---
   const container = tableEl.closest('.table-container') as HTMLElement | null;
+  if (container && !(container as any)._scrollInit) {
+    container.addEventListener('scroll', () => {
+      container.classList.toggle('scrolled', container.scrollTop > 0);
+    });
+    (container as any)._scrollInit = true;
+  }
   const useVirt = rows.length > 200 && !!container;
   const getRowH = (): number => {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--row-h').trim();
@@ -1182,6 +1240,7 @@ function renderGrid(
       for (const c of cols) {
         const td = document.createElement('td');
         td.setAttribute('role', 'gridcell');
+        if (numericCols.has(c)) td.classList.add('num');
         const v = (r as Record<string, unknown>)[c];
         // Never display raw numeric IDs
         if (c === 'id') {
