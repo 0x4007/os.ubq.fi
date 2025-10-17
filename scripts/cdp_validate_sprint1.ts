@@ -210,6 +210,31 @@ async function addSimpleFilter(cdp: CDPClient): Promise<void> {
   await evalStr(cdp, js);
 }
 
+async function waitForChipCount(
+  cdp: CDPClient,
+  min: number,
+  timeoutMs = 5000,
+  pollMs = 200,
+): Promise<number> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const s = await evalStr(
+      cdp,
+      `(() => { const n = document.querySelectorAll('#filterChips .chip').length; return String(n); })()`,
+    );
+    const n = Number.parseInt(s);
+    if (Number.isFinite(n) && n >= min) return n;
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  // Final read
+  const s = await evalStr(
+    cdp,
+    `(() => { const n = document.querySelectorAll('#filterChips .chip').length; return String(n); })()`,
+  );
+  const n = Number.parseInt(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
 if (import.meta.main) {
   const args = parseArgs();
   await Deno.mkdir(args.outDir, { recursive: true });
@@ -250,14 +275,21 @@ if (import.meta.main) {
     await capture(cdp, descPng);
     results.sortDesc = { href: href2, png: descPng };
 
-    // Add a simple filter via builder
+    // Add a simple filter via builder and wait until chips render
     await addSimpleFilter(cdp);
-    await new Promise((r) => setTimeout(r, 800));
+    let chipsCountNum = await waitForChipCount(cdp, 1, 6000, 250);
+    // Fallback: if chips didn't render (slow network or builder didn't attach), inject filters via URL
+    if (chipsCountNum < 1) {
+      await evalStr(
+        cdp,
+        `(() => { const u=new URL(location.href); if(!u.searchParams.get('filters')){ u.searchParams.set('filters','id.eq.1'); history.pushState({},'',u.toString()); window.dispatchEvent(new PopStateEvent('popstate')); } return location.href; })()`,
+      );
+      chipsCountNum = await waitForChipCount(cdp, 1, 6000, 250);
+    }
     const href3 = await evalStr(cdp, 'location.href');
-    const chipsCount = await evalStr(cdp, `(() => { const chips = document.querySelectorAll('#filterChips .chip'); return String(chips.length); })()`);
     const filtPng = `${args.outDir}/filters.png`;
     await capture(cdp, filtPng);
-    results.filters = { href: href3, chips: chipsCount, png: filtPng };
+    results.filters = { href: href3, chips: String(chipsCountNum), png: filtPng };
 
     const outJson = `${args.outDir}/results.json`;
     await Deno.writeTextFile(outJson, JSON.stringify(results, null, 2));

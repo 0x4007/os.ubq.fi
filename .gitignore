@@ -19,3 +19,4 @@ public/**/*.map
 logs/
 docs/sprints/
 screenshots/
+.chrome-ubq/

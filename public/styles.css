@@ -163,3 +163,14 @@ label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
   .card { break-inside: avoid; page-break-inside: avoid; border-color: #ccc; }
   .mini-table th, .mini-table td, .table th, .table td { border-color: #ccc; color: #111; }
 }
+
+/* Loading overlay/skeleton for grid container */
+.table-container.loading { position: relative; }
+.table-container.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  animation: shimmer 1.2s infinite;
+  pointer-events: none;
+}

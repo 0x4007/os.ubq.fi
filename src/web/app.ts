@@ -452,6 +452,7 @@ function createDashboard(opts: DashboardOpts) {
         state.sort,
         state.desc,
         (col) => onSortColumn(col),
+        state.selectedIndex,
       );
       // Refresh filters UI since available columns may change per table
       renderFilterUI();
@@ -582,6 +583,61 @@ function createDashboard(opts: DashboardOpts) {
     if (state.table) void selectTable(state.table);
   });
 
+  // Keyboard navigation on grid (ArrowUp/Down, Enter to toggle)
+  opts.grid.addEventListener('keydown', (e) => {
+    const key = e.key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter') return;
+    if (!state.lastRows || state.lastRows.length === 0) return;
+    if (key === 'ArrowDown') {
+      e.preventDefault();
+      state.selectedIndex = Math.min(state.lastRows.length - 1, Math.max(0, (state.selectedIndex ?? 0) + 1));
+      highlightSelectedRow();
+      scrollToSelected();
+      const row = state.lastRows[state.selectedIndex]!;
+      void onRowClick(row, state.selectedIndex);
+      return;
+    }
+    if (key === 'ArrowUp') {
+      e.preventDefault();
+      state.selectedIndex = Math.max(0, (state.selectedIndex ?? 0) - 1);
+      highlightSelectedRow();
+      scrollToSelected();
+      const row = state.lastRows[state.selectedIndex]!;
+      void onRowClick(row, state.selectedIndex);
+      return;
+    }
+    if (key === 'Enter') {
+      e.preventDefault();
+      toggleSelectedExpander();
+      return;
+    }
+  });
+
+  function highlightSelectedRow() {
+    const rowsEls = opts.grid.querySelectorAll('tbody tr.row-click');
+    rowsEls.forEach((tr) => {
+      tr.classList.remove('selected');
+      tr.removeAttribute('aria-selected');
+    });
+    const sel = opts.grid.querySelector(`tbody tr.row-click[data-index="${state.selectedIndex}"]`) as HTMLTableRowElement | null;
+    if (sel) {
+      sel.classList.add('selected');
+      sel.setAttribute('aria-selected', 'true');
+    }
+  }
+
+  function scrollToSelected() {
+    const api = opts.grid as unknown as { __scrollToRow?: (i: number) => void };
+    api.__scrollToRow?.(state.selectedIndex ?? 0);
+  }
+
+  function toggleSelectedExpander() {
+    const tr = opts.grid.querySelector(`tbody tr.row-click[data-index="${state.selectedIndex}"]`) as HTMLTableRowElement | null;
+    if (!tr) return;
+    const btn = tr.querySelector('button.expand-toggle') as HTMLButtonElement | null;
+    if (btn) btn.click();
+  }
+
   // Drill-through navigation helper
   async function navigateTo(table: string, filter: string) {
     state.table = table;
@@ -687,6 +743,9 @@ function createDashboard(opts: DashboardOpts) {
   }
 
   async function onRowClick(row: Record<string, unknown>, _idx: number) {
+    // Update selection index and reflect in grid
+    state.selectedIndex = _idx;
+    try { highlightSelectedRow(); scrollToSelected(); } catch { /* ignore */ }
     opts.inspectorTitle.textContent = `${state.table} · Object`;
     const summary = renderKeyValues(row);
     opts.objectSummary.classList.remove('muted');
@@ -889,6 +948,7 @@ function renderGrid(
   currentSort?: string | null,
   currentDesc?: boolean,
   onSort?: (col: string) => void,
+  selectedIndex?: number,
 ) {
   tableEl.innerHTML = '';
   if (rows.length === 0) return;
@@ -897,6 +957,7 @@ function renderGrid(
   const trh = document.createElement('tr');
   // Expander column header
   const thExp = document.createElement('th');
+  thExp.setAttribute('role', 'columnheader');
   thExp.textContent = '';
   thExp.style.width = '24px';
   trh.appendChild(thExp);
@@ -908,6 +969,8 @@ function renderGrid(
     th.style.cursor = 'pointer';
     th.title = `Sort by ${label}`;
     th.textContent = label + (isSorted ? (currentDesc ? ' ▼' : ' ▲') : '');
+    th.setAttribute('role', 'columnheader');
+    th.setAttribute('scope', 'col');
     if (isSorted) th.classList.add(currentDesc ? 'sorted-desc' : 'sorted-asc');
     if (onSort) {
       th.addEventListener('click', (e) => {
@@ -928,172 +991,270 @@ function renderGrid(
   tableEl.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  rows.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.className = 'row-click';
-    tr.addEventListener('click', () => onRowClick(r, i));
-    // Expander cell
-    const tdExp = document.createElement('td');
-    tdExp.className = 'expander-cell';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'expand-toggle';
-    btn.setAttribute('aria-label', 'Toggle related');
-    btn.textContent = '▶';
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      if (btn.dataset.expanded === 'true') {
-        // collapse
-        const next = tr.nextElementSibling as HTMLTableRowElement | null;
-        if (next && next.classList.contains('expand-row')) {
-          next.remove();
-        }
-        btn.textContent = '▶';
-        btn.dataset.expanded = 'false';
-        return;
-      }
-      // expand
-      btn.textContent = '▼';
-      btn.dataset.expanded = 'true';
-      const expandTr = document.createElement('tr');
-      expandTr.className = 'expand-row';
-      const td = document.createElement('td');
-      td.colSpan = cols.length + 1; // expander + all data columns
-      const wrap = document.createElement('div');
-      wrap.className = 'expand-wrap';
-      const outCard = document.createElement('div');
-      outCard.className = 'card';
-      outCard.innerHTML = '<div class="muted">Related</div><div class="rel-out"></div>';
-      const inCard = document.createElement('div');
-      inCard.className = 'card';
-      inCard.innerHTML = '<div class="muted">Referenced By</div><div class="rel-in"></div>';
-      wrap.appendChild(outCard);
-      wrap.appendChild(inCard);
-      td.appendChild(wrap);
-      expandTr.appendChild(td);
-      tr.insertAdjacentElement('afterend', expandTr);
-
-      const idVal = (r as Record<string, unknown>)['id'];
-      const outEl = outCard.querySelector('.rel-out') as HTMLDivElement;
-      const inEl = inCard.querySelector('.rel-in') as HTMLDivElement;
-      if (idVal == null) {
-        outEl.textContent = '(row has no id)';
-        inEl.textContent = '';
-        return;
-      }
-      // fetch related
-      if (!tableName) {
-        outEl.textContent = '(missing table context)';
-        inEl.textContent = '';
-        return;
-      }
-      void (async () => {
-        outEl.textContent = 'Loading…';
-        inEl.textContent = 'Loading…';
-        const idStr = String(idVal);
-        try {
-          const ob = await fetchJSON(
-            `/api/sb/outbound?table=${encodeURIComponent(tableName)}&id=${encodeURIComponent(idStr)}`,
-          );
-          if (ob.ok) {
-            outEl.innerHTML = '';
-            type OutboundRef = {
-              column: string;
-              toTable: string;
-              row: Record<string, unknown> | null;
-            };
-            const refs = (ob.data as { refs: OutboundRef[] }).refs;
-            for (const r2 of refs) {
-              const card = document.createElement('div');
-              card.className = 'card';
-              const title = friendlyLabel(r2.column, r2.toTable);
-              card.innerHTML = `<div class="muted">${title}</div>`;
-              if (r2.row) {
-                const kv = renderKeyValues(r2.row);
-                card.appendChild(kv);
-                void enrichGitHubInKV(kv, r2.row, r2.toTable);
-                try {
-                  const map = await loadRelationsMap(r2.toTable);
-                  void enrichForeignInKV(kv, r2.row, r2.toTable, map);
-                } catch {
-                  // noop
-                }
-              } else card.innerHTML += '<div class="muted">(none)</div>';
-              outEl.appendChild(card);
-            }
-            if (refs.length === 0) outEl.textContent = '(none)';
-          } else {
-            outEl.textContent = `Failed: ${ob.status}`;
-          }
-        } catch (err) {
-          outEl.textContent = `Error: ${String(err)}`;
-        }
-
-        try {
-          const ib = await fetchJSON(
-            `/api/sb/inbound?table=${encodeURIComponent(tableName)}&id=${encodeURIComponent(idStr)}&limit=3`,
-          );
-          if (ib.ok) {
-            inEl.innerHTML = '';
-            type InRef = {
-              fromTable: string;
-              fromColumn: string;
-              rows: Record<string, unknown>[];
-              total: number | null;
-            };
-            const refs = (ib.data as { refs: InRef[] }).refs;
-            for (const r3 of refs) {
-              const card = document.createElement('div');
-              card.className = 'card';
-              const header = document.createElement('div');
-              header.className = 'muted';
-              header.textContent = `${r3.fromTable}.${r3.fromColumn} (${r3.total ?? 0})`;
-              card.appendChild(header);
-              if (r3.rows && r3.rows.length > 0) {
-                const tbl = renderMiniTable(r3.rows) as HTMLTableElement;
-                card.appendChild(tbl);
-                void enrichGitHubInMiniTable(tbl, r3.rows);
-                try {
-                  const map = await loadRelationsMap(r3.fromTable);
-                  void enrichMiniTableForeigns(tbl, r3.rows, map);
-                } catch {
-                  // noop
-                }
-              }
-              inEl.appendChild(card);
-            }
-            if (refs.length === 0) inEl.textContent = '(none)';
-          } else {
-            inEl.textContent = `Failed: ${ib.status}`;
-          }
-        } catch (err) {
-          inEl.textContent = `Error: ${String(err)}`;
-        }
-      })();
-    });
-    tdExp.appendChild(btn);
-    tr.appendChild(tdExp);
-    for (const c of cols) {
-      const td = document.createElement('td');
-      const v = (r as Record<string, unknown>)[c];
-      // Never display raw numeric IDs
-      if (c === 'id') {
-        td.textContent = '';
-      } else if (c.endsWith('_id') && tableName) {
-        // Replace *_id with a friendly representation
-        td.textContent = '';
-        const toTable = relations?.get(c) ?? null;
-        void renderForeignCell(td, c, toTable, v, tableName);
-      } else {
-        const text = formatCell(v);
-        td.textContent = text;
-        if (text) td.title = text;
-      }
-      tr.appendChild(td);
-    }
-    tbody.appendChild(tr);
-  });
   tableEl.appendChild(tbody);
+
+  // --- Virtualized rendering ---
+  const container = tableEl.closest('.table-container') as HTMLElement | null;
+  const useVirt = rows.length > 200 && !!container;
+  const getRowH = (): number => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--row-h').trim();
+    const n = Number.parseFloat(v || '32');
+    return Number.isFinite(n) ? n : 32;
+  };
+  const rowH = getRowH();
+  const buffer = 6;
+
+  const renderSlice = (startIdx: number) => {
+    const start = Math.max(0, Math.min(rows.length - 1, startIdx | 0));
+    const viewportH = container ? container.clientHeight : rowH * rows.length;
+    const visible = Math.max(1, Math.ceil(viewportH / rowH) + buffer);
+    const end = Math.min(rows.length, start + visible);
+    tbody.innerHTML = '';
+    // Top spacer
+    if (useVirt && start > 0) {
+      const t = document.createElement('tr');
+      t.className = 'v-spacer';
+      const td = document.createElement('td');
+      td.colSpan = cols.length + 1;
+      td.style.height = `${start * rowH}px`;
+      t.appendChild(td);
+      tbody.appendChild(t);
+    }
+    for (let i = start; i < end; i++) {
+      const r = rows[i]!;
+      const tr = document.createElement('tr');
+      tr.className = 'row-click';
+      tr.setAttribute('role', 'row');
+      if (selectedIndex != null && i === selectedIndex) {
+        tr.classList.add('selected');
+        tr.setAttribute('aria-selected', 'true');
+      }
+      tr.dataset.index = String(i);
+      tr.addEventListener('click', () => onRowClick(r, i));
+      // Expander cell
+      const tdExp = document.createElement('td');
+      tdExp.className = 'expander-cell';
+      tdExp.setAttribute('role', 'gridcell');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'expand-toggle';
+      btn.setAttribute('aria-label', 'Toggle related');
+      btn.setAttribute('aria-expanded', 'false');
+      const panelId = `exp-${tableName || 't'}-${i}`;
+      btn.setAttribute('aria-controls', panelId);
+      btn.textContent = '▶';
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (btn.dataset.expanded === 'true') {
+          // collapse
+          const next = tr.nextElementSibling as HTMLTableRowElement | null;
+          if (next && next.classList.contains('expand-row')) {
+            next.remove();
+          }
+          btn.textContent = '▶';
+          btn.dataset.expanded = 'false';
+          btn.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        // expand
+        btn.textContent = '▼';
+        btn.dataset.expanded = 'true';
+        btn.setAttribute('aria-expanded', 'true');
+        const expandTr = document.createElement('tr');
+        expandTr.id = panelId;
+        expandTr.className = 'expand-row';
+        const td = document.createElement('td');
+        td.colSpan = cols.length + 1; // expander + all data columns
+        const wrap = document.createElement('div');
+        wrap.className = 'expand-wrap';
+        const outCard = document.createElement('div');
+        outCard.className = 'card';
+        outCard.innerHTML = '<div class="muted">Related</div><div class="rel-out"></div>';
+        const inCard = document.createElement('div');
+        inCard.className = 'card';
+        inCard.innerHTML = '<div class="muted">Referenced By</div><div class="rel-in"></div>';
+        wrap.appendChild(outCard);
+        wrap.appendChild(inCard);
+        td.appendChild(wrap);
+        expandTr.appendChild(td);
+        tr.insertAdjacentElement('afterend', expandTr);
+
+        const idVal = (r as Record<string, unknown>)['id'];
+        const outEl = outCard.querySelector('.rel-out') as HTMLDivElement;
+        const inEl = inCard.querySelector('.rel-in') as HTMLDivElement;
+        if (idVal == null) {
+          outEl.textContent = '(row has no id)';
+          inEl.textContent = '';
+          return;
+        }
+        // fetch related
+        if (!tableName) {
+          outEl.textContent = '(missing table context)';
+          inEl.textContent = '';
+          return;
+        }
+        void (async () => {
+          outEl.textContent = 'Loading…';
+          inEl.textContent = 'Loading…';
+          const idStr = String(idVal);
+          try {
+            const ob = await fetchJSON(
+              `/api/sb/outbound?table=${encodeURIComponent(tableName)}&id=${encodeURIComponent(idStr)}`,
+            );
+            if (ob.ok) {
+              outEl.innerHTML = '';
+              type OutboundRef = {
+                column: string;
+                toTable: string;
+                row: Record<string, unknown> | null;
+              };
+              const refs = (ob.data as { refs: OutboundRef[] }).refs;
+              for (const r2 of refs) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                const title = friendlyLabel(r2.column, r2.toTable);
+                card.innerHTML = `<div class=\"muted\">${title}</div>`;
+                if (r2.row) {
+                  const kv = renderKeyValues(r2.row);
+                  card.appendChild(kv);
+                  void enrichGitHubInKV(kv, r2.row, r2.toTable);
+                  try {
+                    const map = await loadRelationsMap(r2.toTable);
+                    void enrichForeignInKV(kv, r2.row, r2.toTable, map);
+                  } catch {
+                    // noop
+                  }
+                } else card.innerHTML += '<div class="muted">(none)</div>';
+                outEl.appendChild(card);
+              }
+              if (refs.length === 0) outEl.textContent = '(none)';
+            } else {
+              outEl.textContent = `Failed: ${ob.status}`;
+            }
+          } catch (err) {
+            outEl.textContent = `Error: ${String(err)}`;
+          }
+
+          try {
+            const ib = await fetchJSON(
+              `/api/sb/inbound?table=${encodeURIComponent(tableName)}&id=${encodeURIComponent(idStr)}&limit=3`,
+            );
+            if (ib.ok) {
+              inEl.innerHTML = '';
+              type InRef = {
+                fromTable: string;
+                fromColumn: string;
+                rows: Record<string, unknown>[];
+                total: number | null;
+              };
+              const refs = (ib.data as { refs: InRef[] }).refs;
+              for (const r3 of refs) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                const header = document.createElement('div');
+                header.className = 'muted';
+                header.textContent = `${r3.fromTable}.${r3.fromColumn} (${r3.total ?? 0})`;
+                card.appendChild(header);
+                if (r3.rows && r3.rows.length > 0) {
+                  const tbl = renderMiniTable(r3.rows) as HTMLTableElement;
+                  card.appendChild(tbl);
+                  void enrichGitHubInMiniTable(tbl, r3.rows);
+                  try {
+                    const map = await loadRelationsMap(r3.fromTable);
+                    void enrichMiniTableForeigns(tbl, r3.rows, map);
+                  } catch {
+                    // noop
+                  }
+                }
+                inEl.appendChild(card);
+              }
+              if (refs.length === 0) inEl.textContent = '(none)';
+            } else {
+              inEl.textContent = `Failed: ${ib.status}`;
+            }
+          } catch (err) {
+            inEl.textContent = `Error: ${String(err)}`;
+          }
+        })();
+      });
+      tdExp.appendChild(btn);
+      tr.appendChild(tdExp);
+      for (const c of cols) {
+        const td = document.createElement('td');
+        td.setAttribute('role', 'gridcell');
+        const v = (r as Record<string, unknown>)[c];
+        // Never display raw numeric IDs
+        if (c === 'id') {
+          td.textContent = '';
+        } else if (c.endsWith('_id') && tableName) {
+          // Replace *_id with a friendly representation
+          td.textContent = '';
+          const toTable = relations?.get(c) ?? null;
+          void renderForeignCell(td, c, toTable, v, tableName);
+        } else {
+          const text = formatCell(v);
+          td.textContent = text;
+          if (text) td.title = text;
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    // Bottom spacer
+    if (useVirt) {
+      const remaining = Math.max(0, rows.length - (end));
+      if (remaining > 0) {
+        const t = document.createElement('tr');
+        t.className = 'v-spacer';
+        const td = document.createElement('td');
+        td.colSpan = cols.length + 1;
+        td.style.height = `${remaining * rowH}px`;
+        t.appendChild(td);
+        tbody.appendChild(t);
+      }
+    }
+    // Stash slice info
+    (tableEl as unknown as { __v?: Record<string, unknown> }).__v = {
+      start,
+      end,
+      rowH,
+    };
+  };
+
+  if (useVirt && container) {
+    const onScroll = () => {
+      const st = container.scrollTop;
+      const start = Math.max(0, Math.floor(st / rowH) - Math.floor(buffer / 2));
+      renderSlice(start);
+    };
+    // Render initial
+    const initialStart = Math.max(0, selectedIndex != null ? selectedIndex - Math.floor(buffer / 2) : 0);
+    renderSlice(initialStart);
+    // Attach listener (debounced via rAF)
+    let raf = 0;
+    const handler = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(onScroll);
+    };
+    const cAny = container as unknown as { __virtHandler?: (this: HTMLElement, ev: Event) => any };
+    if (cAny.__virtHandler) container.removeEventListener('scroll', cAny.__virtHandler);
+    cAny.__virtHandler = handler as (this: HTMLElement, ev: Event) => any;
+    container.addEventListener('scroll', cAny.__virtHandler, { passive: true });
+    // Expose helper to jump to a row by index
+    (tableEl as unknown as { __scrollToRow?: (i: number) => void }).__scrollToRow = (i: number) => {
+      const y = Math.max(0, i) * rowH;
+      container.scrollTop = y;
+      renderSlice(Math.max(0, i - Math.floor(buffer / 2)));
+    };
+  } else {
+    // Non-virtualized: render all
+    renderSlice(0);
+    // Provide stub
+    (tableEl as unknown as { __scrollToRow?: (i: number) => void }).__scrollToRow = (i: number) => {
+      const row = tbody.querySelector(`tr.row-click[data-index="${i}"]`) as HTMLTableRowElement | null;
+      if (row) row.scrollIntoView({ block: 'nearest' });
+    };
+  }
 }
 
 // cache for referenced rows per table:id
