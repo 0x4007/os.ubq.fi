@@ -33,6 +33,11 @@ The Supabase Explorer provides a compact way to browse tables and see how rows r
   - Heuristics need `*_id` to match a table name (`user_id` → `users`).
 - To get exact relationships, install the `public.db_relations` RPC described in `docs/RELATIONS.md` (no UI change required).
 
+## Keyboard & Theme
+
+- Grid navigation: Arrow Up/Down moves selection; Enter toggles the row expander. The selected row is highlighted. The grid itself is focusable; press Tab to focus, then use the keys.
+- Theme toggle: click the “Theme” button in the toolbar to switch between dark and light. The choice is saved to `localStorage` and restored on reload.
+
 ## Saved Views
 
 - Save the current view (table + pagination + filters) using the “Save View” button in the sidebar.
@@ -67,15 +72,3 @@ Notes
 
 - Exports operate purely on the client using already-fetched rows; no extra server work.
 - Filenames include the table name and range for traceability, e.g., `users_001-050.csv`.
-
-## Notes on Expanders
-
-- Expanding a row makes two API calls (`/api/sb/outbound` and `/api/sb/inbound`) for that row ID.
-- Inbound previews show up to 3 sample rows per relation to keep rendering fast.
-- Rows without an `id` won’t show expanders content (the ID is required to query relations).
-
-## Keyboard/UX Ideas (future)
-
-- Arrow keys to move between rows.
-- Pin columns and enable per-column sorting.
-- Multi-hop traversal and quick graph view.
