@@ -22,7 +22,39 @@ function byId<T extends HTMLElement>(id: string): T {
   return el as T;
 }
 
+// ─── Theme toggle ──────────────────────────────────────────────────
+
+const THEME_KEY = 'theme';
+type Theme = 'light' | 'dark';
+
+function getStoredTheme(): Theme {
+  const stored = localStorage.getItem(THEME_KEY);
+  return stored === 'light' || stored === 'dark' ? stored : 'dark';
+}
+
+function applyTheme(theme: Theme, btn: HTMLButtonElement) {
+  document.documentElement.dataset['theme'] = theme;
+  btn.textContent = theme === 'dark' ? '☀ Light' : '☾ Dark';
+  btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+}
+
+function initTheme(btn: HTMLButtonElement) {
+  const initial = getStoredTheme();
+  applyTheme(initial, btn);
+
+  btn.addEventListener('click', () => {
+    const next: Theme = document.documentElement.dataset['theme'] === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next, btn);
+  });
+}
+
+// ─── Main ──────────────────────────────────────────────────────────
+
 window.addEventListener('DOMContentLoaded', () => {
+  const themeBtn = byId<HTMLButtonElement>('themeToggle');
+  initTheme(themeBtn);
+
   const healthBtn = byId<HTMLButtonElement>('checkHealth');
   const healthOut = byId<HTMLPreElement>('healthOut');
   const timeBtn = byId<HTMLButtonElement>('getTime');
