@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -7,35 +7,71 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <main id="main-content" tabindex="-1">
       <h1>os.ubq.fi</h1>
       <p>Minimal Deno server with a simple UI and API.</p>
 
-      <section>
-        <h2>Health</h2>
-        <button id="checkHealth">Check Health</button>
-        <pre id="healthOut">(click to load)</pre>
+      <section
+        class="api-card"
+        tabindex="0"
+        role="region"
+        aria-labelledby="health-heading"
+      >
+        <h2 id="health-heading">Health</h2>
+        <button id="checkHealth" type="button" aria-controls="healthOut">
+          Check Health
+        </button>
+        <pre
+          id="healthOut"
+          role="status"
+          aria-live="polite"
+        >(click to load)</pre>
       </section>
 
-      <section>
-        <h2>Time</h2>
-        <button id="getTime">Get Time</button>
-        <pre id="timeOut">(click to load)</pre>
+      <section
+        class="api-card"
+        tabindex="0"
+        role="region"
+        aria-labelledby="time-heading"
+      >
+        <h2 id="time-heading">Time</h2>
+        <button id="getTime" type="button" aria-controls="timeOut">
+          Get Time
+        </button>
+        <pre id="timeOut" role="status" aria-live="polite">(click to load)</pre>
       </section>
 
-      <section>
-        <h2>Echo</h2>
+      <section
+        class="api-card"
+        tabindex="0"
+        role="region"
+        aria-labelledby="echo-heading"
+      >
+        <h2 id="echo-heading">Echo</h2>
         <form id="echoForm">
           <label>
             JSON payload
-            <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
+            <textarea
+              id="echoInput"
+              rows="4"
+              aria-describedby="echo-help"
+              placeholder='{"hello":"world"}'
+            ></textarea>
           </label>
-          <button type="submit">POST /api/echo</button>
+          <p id="echo-help" class="visually-hidden">
+            Enter a JSON payload to send to the echo API.
+          </p>
+          <button type="submit" aria-controls="echoOut">POST /api/echo</button>
         </form>
-        <pre id="echoOut">(submit to send)</pre>
+        <pre
+          id="echoOut"
+          role="status"
+          aria-live="polite"
+        >(submit to send)</pre>
       </section>
     </main>
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
