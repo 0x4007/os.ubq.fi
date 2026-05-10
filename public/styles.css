@@ -68,7 +68,7 @@ label,
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(140px, 180px) minmax(220px, 1fr) minmax(110px, 140px);
+  grid-template-columns: minmax(140px, 180px) minmax(360px, 1fr) minmax(110px, 140px);
   gap: 12px;
   align-items: end;
   padding: 16px;
@@ -99,6 +99,28 @@ select:focus,
 button:focus-visible {
   outline: 3px solid #bfdbfe;
   outline-offset: 2px;
+}
+
+.filter-builder {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(110px, 0.7fr) minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 12px;
+  padding: 10px 16px;
+  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.filter-chips:empty {
+  display: none;
 }
 
 .table-shell {
@@ -194,7 +216,8 @@ tbody tr[data-row-id] {
 }
 
 .sort-button,
-.row-toggle {
+.row-toggle,
+.filter-chip {
   min-height: 32px;
   color: var(--primary);
   background: transparent;
@@ -202,10 +225,18 @@ tbody tr[data-row-id] {
 }
 
 .sort-button:hover:not(:disabled),
-.row-toggle:hover:not(:disabled) {
+.row-toggle:hover:not(:disabled),
+.filter-chip:hover:not(:disabled) {
   background: transparent;
   color: var(--primary-hover);
   text-decoration: underline;
+}
+
+.filter-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #f8fbff;
+  padding: 0 10px;
 }
 
 .details-panel {
@@ -244,6 +275,10 @@ pre {
   }
 
   .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-builder {
     grid-template-columns: 1fr;
   }
 

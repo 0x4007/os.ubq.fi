@@ -25,10 +25,27 @@
           </select>
         </label>
 
-        <label class="filter-field">
-          Filter
-          <input id="filterInput" type="search" placeholder="Search current table" />
-        </label>
+        <div class="filter-builder">
+          <label>
+            Column
+            <select id="filterColumn"></select>
+          </label>
+
+          <label>
+            Match
+            <select id="filterOperator">
+              <option value="ilike">Contains</option>
+              <option value="eq">Equals</option>
+            </select>
+          </label>
+
+          <label class="filter-field">
+            Filter
+            <input id="filterInput" type="search" placeholder="Value" />
+          </label>
+
+          <button id="addFilter" type="button">Add</button>
+        </div>
 
         <label>
           Rows
@@ -41,6 +58,8 @@
           </select>
         </label>
       </section>
+
+      <div id="filterChips" class="filter-chips" aria-label="Active filters"></div>
 
       <section class="table-shell" aria-label="State table">
         <div class="table-status">

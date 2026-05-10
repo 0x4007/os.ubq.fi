@@ -18,6 +18,14 @@ type Column = {
   label: string;
 };
 
+type FilterOperator = 'eq' | 'ilike';
+
+type ColumnFilter = {
+  key: keyof Row;
+  op: FilterOperator;
+  value: string;
+};
+
 type ViewState = {
   desc: boolean;
   filters: string;
@@ -74,6 +82,10 @@ const DEFAULT_STATE: ViewState = {
 const LIMITS = [10, 25, 50, 100, 5000];
 const ROW_HEIGHT = 55;
 const OVERSCAN_ROWS = 8;
+const FILTER_OPERATORS: Record<FilterOperator, string> = {
+  eq: 'equals',
+  ilike: 'contains',
+};
 
 let state = parseStateFromUrl(location.search);
 let activeColumns: Column[] = [];
@@ -96,7 +108,7 @@ function parseStateFromUrl(search: string): ViewState {
 
   return {
     desc: params.get('desc') === 'true',
-    filters: params.get('filters')?.trim() ?? DEFAULT_STATE.filters,
+    filters: normalizeFilters(params.get('filters'), columns),
     limit: parseLimit(params.get('limit')),
     offset: parseNonNegativeInt(params.get('offset'), DEFAULT_STATE.offset),
     rowId: params.get('rowId')?.trim() ?? DEFAULT_STATE.rowId,
@@ -177,7 +189,6 @@ function serializeState(current: ViewState): URLSearchParams {
 function render() {
   const tableSelect = byId<HTMLSelectElement>('tableSelect');
   const limitSelect = byId<HTMLSelectElement>('limitSelect');
-  const filterInput = byId<HTMLInputElement>('filterInput');
   const pageSummary = byId<HTMLParagraphElement>('pageSummary');
   const prevPage = byId<HTMLButtonElement>('prevPage');
   const nextPage = byId<HTMLButtonElement>('nextPage');
@@ -206,7 +217,7 @@ function render() {
 
   tableSelect.value = state.table;
   limitSelect.value = String(state.limit);
-  filterInput.value = state.filters;
+  renderFilterControls(table.columns);
   pageSummary.textContent = `${table.label}: ${start}-${end} of ${sorted.length}`;
   prevPage.disabled = offset === 0;
   nextPage.disabled = offset + state.limit >= sorted.length;
@@ -222,6 +233,54 @@ function render() {
   tableHead.replaceChildren(renderHeader(table.columns));
   renderVirtualRows(tableBody, table.columns, pageRows, tableScroll);
   rowDetails.replaceChildren(renderDetails(selectedRow));
+}
+
+function renderFilterControls(columns: Column[]) {
+  const filterColumn = byId<HTMLSelectElement>('filterColumn');
+  const filterChips = byId<HTMLDivElement>('filterChips');
+  const selectedColumn = columns.some((column) => column.key === filterColumn.value)
+    ? filterColumn.value
+    : String(columns[0]?.key ?? 'name');
+  filterColumn.replaceChildren(
+    ...columns.map((column) => {
+      const option = document.createElement('option');
+      option.value = String(column.key);
+      option.textContent = column.label;
+      return option;
+    }),
+  );
+  filterColumn.value = selectedColumn;
+  filterChips.replaceChildren(
+    ...parseFilters(state.filters, columns).map((filter, index) =>
+      renderFilterChip(filter, columns, index),
+    ),
+  );
+}
+
+function renderFilterChip(
+  filter: ColumnFilter,
+  columns: Column[],
+  index: number,
+): HTMLButtonElement {
+  const button = document.createElement('button');
+  const label = columns.find((column) => column.key === filter.key)?.label ?? String(filter.key);
+  button.type = 'button';
+  button.className = 'filter-chip';
+  button.textContent = `${label} ${FILTER_OPERATORS[filter.op]} ${filter.value} ×`;
+  button.setAttribute(
+    'aria-label',
+    `Remove filter ${label} ${FILTER_OPERATORS[filter.op]} ${filter.value}`,
+  );
+  button.addEventListener('click', () => {
+    const filters = parseFilters(state.filters, columns);
+    filters.splice(index, 1);
+    setState({
+      filters: serializeFilters(filters),
+      offset: 0,
+      rowId: '',
+    });
+  });
+  return button;
 }
 
 function renderVirtualRows(
@@ -347,9 +406,17 @@ function renderDetails(row: Row | null): HTMLElement {
 }
 
 function filterRows(rows: Row[], query: string): Row[] {
-  const normalized = query.toLowerCase();
-  if (!normalized) return rows;
-  return rows.filter((row) => Object.values(row).join(' ').toLowerCase().includes(normalized));
+  const filters = parseFilters(query, TABLES[state.table].columns);
+  if (filters.length === 0) return rows;
+  return rows.filter((row) =>
+    filters.every((filter) => {
+      const cellValue = String(row[filter.key] ?? '');
+      if (filter.op === 'eq') {
+        return cellValue.toLowerCase() === filter.value.toLowerCase();
+      }
+      return cellValue.toLowerCase().includes(filter.value.toLowerCase());
+    }),
+  );
 }
 
 function sortRows(rows: Row[], sort: keyof Row, desc: boolean): Row[] {
@@ -359,6 +426,37 @@ function sortRows(rows: Row[], sort: keyof Row, desc: boolean): Row[] {
     const rightValue = String(right[sort] ?? '');
     return leftValue.localeCompare(rightValue, undefined, { numeric: true }) * direction;
   });
+}
+
+function parseFilters(value: string, columns: Column[]): ColumnFilter[] {
+  if (!value) return [];
+  const columnKeys = new Set(columns.map((column) => column.key));
+  return value
+    .split(',')
+    .map((part) => {
+      const [key, op, ...rawValueParts] = part.split('.');
+      const rawValue = rawValueParts.join('.');
+      if (!key || !isFilterOperator(op) || !columnKeys.has(key as keyof Row) || !rawValue) {
+        return null;
+      }
+      const decodedValue = decodeURIComponent(rawValue).trim();
+      return decodedValue ? { key: key as keyof Row, op, value: decodedValue } : null;
+    })
+    .filter((filter): filter is ColumnFilter => filter !== null);
+}
+
+function normalizeFilters(value: string | null, columns: Column[]): string {
+  return serializeFilters(parseFilters(value?.trim() ?? DEFAULT_STATE.filters, columns));
+}
+
+function serializeFilters(filters: ColumnFilter[]): string {
+  return filters
+    .map((filter) => `${String(filter.key)}.${filter.op}.${encodeURIComponent(filter.value)}`)
+    .join(',');
+}
+
+function isFilterOperator(value: string | undefined): value is FilterOperator {
+  return value === 'eq' || value === 'ilike';
 }
 
 function exportCurrentView(format: 'csv' | 'json') {
@@ -464,7 +562,10 @@ function makeDate(offset: number): string {
 window.addEventListener('DOMContentLoaded', () => {
   const tableSelect = byId<HTMLSelectElement>('tableSelect');
   const limitSelect = byId<HTMLSelectElement>('limitSelect');
+  const filterColumn = byId<HTMLSelectElement>('filterColumn');
   const filterInput = byId<HTMLInputElement>('filterInput');
+  const filterOperator = byId<HTMLSelectElement>('filterOperator');
+  const addFilter = byId<HTMLButtonElement>('addFilter');
   const exportCsv = byId<HTMLButtonElement>('exportCsv');
   const exportJson = byId<HTMLButtonElement>('exportJson');
   const prevPage = byId<HTMLButtonElement>('prevPage');
@@ -487,8 +588,28 @@ window.addEventListener('DOMContentLoaded', () => {
     setState({ limit: parseLimit(limitSelect.value), offset: 0 });
   });
 
-  filterInput.addEventListener('input', () => {
-    setState({ filters: filterInput.value.trim(), offset: 0, rowId: '' });
+  addFilter.addEventListener('click', () => {
+    const value = filterInput.value.trim();
+    const table = TABLES[state.table];
+    const key = parseColumn(filterColumn.value, table.columns);
+    const op = isFilterOperator(filterOperator.value) ? filterOperator.value : 'ilike';
+    if (!value) return;
+
+    setState({
+      filters: serializeFilters([
+        ...parseFilters(state.filters, table.columns),
+        { key, op, value },
+      ]),
+      offset: 0,
+      rowId: '',
+    });
+    filterInput.value = '';
+  });
+
+  filterInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addFilter.click();
   });
 
   exportCsv.addEventListener('click', () => {

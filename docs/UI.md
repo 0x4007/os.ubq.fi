@@ -9,7 +9,7 @@ Supported parameters:
 - `limit`: page size, one of `10`, `25`, `50`, `100`, or `5000`
 - `sort`: the active column key for the selected table
 - `desc`: `true` for descending order, `false` for ascending order
-- `filters`: free-text filter applied to the active table
+- `filters`: comma-separated column filters in `column.operator.value` form
 - `rowId`: expanded row identifier
 
 Example:
@@ -18,7 +18,18 @@ Example:
 /?table=users&offset=50&limit=25&sort=created&desc=true
 ```
 
-Changing controls pushes a history entry. Browser back and forward restore the previous table, pagination, sort direction, filter, and expanded row.
+Filter operators are:
+
+- `eq`: exact value match
+- `ilike`: case-insensitive contains match
+
+Example with filters:
+
+```text
+/?table=issues&offset=0&limit=25&sort=created&desc=false&filters=repo.ilike.work,status.eq.assigned
+```
+
+Changing controls pushes a history entry. Browser back and forward restore the previous table, pagination, sort direction, filters, and expanded row.
 
 Large pages are virtualized. The `5000` row option keeps the same selection and expanded row state while rendering only the visible scroll window.
 
