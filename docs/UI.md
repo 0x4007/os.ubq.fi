@@ -33,6 +33,8 @@ Changing controls pushes a history entry. Browser back and forward restore the p
 
 Saved views store the current query string in `localStorage` under a user-provided name. Applying a saved view restores the stored URL state and pushes it into browser history. Deleting a saved view removes only that local entry.
 
+The chart panel renders lazily from the current filtered rows without extra requests. Users and issues show status totals; plugins show health totals.
+
 Large pages are virtualized. The `5000` row option keeps the same selection and expanded row state while rendering only the visible scroll window.
 
 The CSV and JSON export buttons download the current sorted, filtered, paginated slice. CSV exports use the visible column labels and values, excluding raw row identifiers. JSON exports include `{ columns, rows, meta }` for the same slice.

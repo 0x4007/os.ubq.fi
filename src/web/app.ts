@@ -97,6 +97,8 @@ let state = parseStateFromUrl(location.search);
 let activeColumns: Column[] = [];
 let activePageRows: Row[] = [];
 let activeTotalRows = 0;
+let chartFrame = 0;
+let pendingChart: { rows: Row[]; table: TableKey } | null = null;
 let pendingScrollTop: number | null = null;
 let scrollFrame = 0;
 
@@ -225,6 +227,7 @@ function render() {
   limitSelect.value = String(state.limit);
   renderFilterControls(table.columns);
   renderSavedViews();
+  scheduleChart(state.table, sorted);
   pageSummary.textContent = `${table.label}: ${start}-${end} of ${sorted.length}`;
   prevPage.disabled = offset === 0;
   nextPage.disabled = offset + state.limit >= sorted.length;
@@ -464,6 +467,86 @@ function serializeFilters(filters: ColumnFilter[]): string {
 
 function isFilterOperator(value: string | undefined): value is FilterOperator {
   return value === 'eq' || value === 'ilike';
+}
+
+function scheduleChart(table: TableKey, rows: Row[]) {
+  pendingChart = { rows, table };
+  if (chartFrame) return;
+  chartFrame = requestAnimationFrame(() => {
+    chartFrame = 0;
+    if (!pendingChart) return;
+    renderChart(pendingChart.table, pendingChart.rows);
+    pendingChart = null;
+  });
+}
+
+function renderChart(table: TableKey, rows: Row[]) {
+  const chartPanel = byId<HTMLElement>('chartPanel');
+  const chartKey: keyof Row = table === 'plugins' ? 'health' : 'status';
+  const title = chartKey === 'health' ? 'Health totals' : 'Status totals';
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const value = String(row[chartKey] ?? 'unknown');
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  const entries = [...counts.entries()].sort((left, right) => {
+    const byCount = right[1] - left[1];
+    return byCount || left[0].localeCompare(right[0]);
+  });
+
+  const heading = document.createElement('h2');
+  heading.className = 'chart-title';
+  heading.textContent = `${title} from ${rows.length} current rows`;
+
+  if (entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'chart-empty';
+    empty.textContent = 'No rows to chart';
+    chartPanel.replaceChildren(heading, empty);
+    return;
+  }
+
+  const maxCount = Math.max(...entries.map(([, count]) => count));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const width = 640;
+  const rowHeight = 32;
+  const height = entries.length * rowHeight + 18;
+  svg.classList.add('chart-svg');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${title} chart`);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+  entries.forEach(([label, count], index) => {
+    const y = index * rowHeight + 8;
+    const barWidth = Math.max(2, Math.round((count / maxCount) * 360));
+    const text = `${label} ${count}`;
+
+    const labelNode = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    labelNode.setAttribute('x', '0');
+    labelNode.setAttribute('y', String(y + 17));
+    labelNode.textContent = label;
+
+    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bar.setAttribute('x', '150');
+    bar.setAttribute('y', String(y));
+    bar.setAttribute('width', String(barWidth));
+    bar.setAttribute('height', '20');
+    bar.setAttribute('rx', '3');
+
+    const countNode = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    countNode.setAttribute('x', String(160 + barWidth));
+    countNode.setAttribute('y', String(y + 16));
+    countNode.textContent = String(count);
+
+    const titleNode = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    titleNode.textContent = text;
+
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.append(titleNode, labelNode, bar, countNode);
+    svg.append(group);
+  });
+
+  chartPanel.replaceChildren(heading, svg);
 }
 
 function renderSavedViews() {

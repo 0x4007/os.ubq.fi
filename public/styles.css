@@ -61,6 +61,7 @@ label,
 
 .toolbar,
 .saved-views,
+.chart-panel,
 .table-shell,
 .details-panel {
   border: 1px solid var(--border);
@@ -131,6 +132,37 @@ button:focus-visible {
   align-items: end;
   padding: 12px 16px;
   border-top: 0;
+}
+
+.chart-panel {
+  padding: 14px 16px;
+  border-top: 0;
+}
+
+.chart-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.chart-empty {
+  color: var(--muted);
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 170px;
+}
+
+.chart-svg text {
+  fill: var(--fg);
+  font: 700 13px Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.chart-svg rect {
+  fill: var(--primary);
 }
 
 .table-shell {
@@ -345,6 +377,11 @@ pre {
   .filter-chips,
   .table-actions {
     display: none;
+  }
+
+  .chart-panel {
+    padding: 0 0 10px;
+    border: 0;
   }
 
   .table-shell,
