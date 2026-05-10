@@ -300,3 +300,90 @@ pre {
     flex: 1;
   }
 }
+
+@media print {
+  :root {
+    --bg: #ffffff;
+    --border: #9ca3af;
+    --fg: #111827;
+    --muted: #374151;
+    --panel: #ffffff;
+    --primary: #111827;
+    --row: #ffffff;
+  }
+
+  body {
+    background: white;
+  }
+
+  main {
+    width: 100%;
+    padding: 0;
+  }
+
+  .page-header {
+    display: block;
+    margin-bottom: 14px;
+  }
+
+  .toolbar,
+  .filter-chips,
+  .table-actions {
+    display: none;
+  }
+
+  .table-shell,
+  .details-panel {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .table-status {
+    display: block;
+    padding: 0 0 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  table {
+    min-width: 0;
+    font-size: 10pt;
+    page-break-inside: auto;
+  }
+
+  tr,
+  .details-panel {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    white-space: normal;
+  }
+
+  .sort-button,
+  .row-toggle {
+    min-height: 0;
+    color: inherit;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .details-panel {
+    margin-top: 16px;
+    padding: 0;
+  }
+
+  pre {
+    max-height: none;
+    border-color: var(--border);
+    background: white;
+    color: var(--fg);
+  }
+}
