@@ -61,6 +61,23 @@
 
       <div id="filterChips" class="filter-chips" aria-label="Active filters"></div>
 
+      <section class="saved-views" aria-label="Saved views">
+        <label>
+          View name
+          <input id="savedViewName" type="text" placeholder="Name this view" />
+        </label>
+
+        <button id="saveCurrentView" type="button">Save</button>
+
+        <label>
+          Saved
+          <select id="savedViewSelect"></select>
+        </label>
+
+        <button id="applySavedView" type="button">Apply</button>
+        <button id="deleteSavedView" type="button">Delete</button>
+      </section>
+
       <section class="table-shell" aria-label="State table">
         <div class="table-status">
           <p id="pageSummary">Loading rows...</p>

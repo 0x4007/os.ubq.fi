@@ -60,6 +60,7 @@ label,
 }
 
 .toolbar,
+.saved-views,
 .table-shell,
 .details-panel {
   border: 1px solid var(--border);
@@ -121,6 +122,15 @@ button:focus-visible {
 
 .filter-chips:empty {
   display: none;
+}
+
+.saved-views {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px 16px;
+  border-top: 0;
 }
 
 .table-shell {
@@ -282,6 +292,10 @@ pre {
     grid-template-columns: 1fr;
   }
 
+  .saved-views {
+    grid-template-columns: 1fr;
+  }
+
   .table-actions,
   .pagination {
     width: 100%;
@@ -327,6 +341,7 @@ pre {
   }
 
   .toolbar,
+  .saved-views,
   .filter-chips,
   .table-actions {
     display: none;

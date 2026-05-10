@@ -31,6 +31,8 @@ Example with filters:
 
 Changing controls pushes a history entry. Browser back and forward restore the previous table, pagination, sort direction, filters, and expanded row.
 
+Saved views store the current query string in `localStorage` under a user-provided name. Applying a saved view restores the stored URL state and pushes it into browser history. Deleting a saved view removes only that local entry.
+
 Large pages are virtualized. The `5000` row option keeps the same selection and expanded row state while rendering only the visible scroll window.
 
 The CSV and JSON export buttons download the current sorted, filtered, paginated slice. CSV exports use the visible column labels and values, excluding raw row identifiers. JSON exports include `{ columns, rows, meta }` for the same slice.

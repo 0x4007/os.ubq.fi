@@ -26,6 +26,11 @@ type ColumnFilter = {
   value: string;
 };
 
+type SavedView = {
+  name: string;
+  search: string;
+};
+
 type ViewState = {
   desc: boolean;
   filters: string;
@@ -86,6 +91,7 @@ const FILTER_OPERATORS: Record<FilterOperator, string> = {
   eq: 'equals',
   ilike: 'contains',
 };
+const SAVED_VIEWS_KEY = 'os.ubq.fi.savedViews';
 
 let state = parseStateFromUrl(location.search);
 let activeColumns: Column[] = [];
@@ -218,6 +224,7 @@ function render() {
   tableSelect.value = state.table;
   limitSelect.value = String(state.limit);
   renderFilterControls(table.columns);
+  renderSavedViews();
   pageSummary.textContent = `${table.label}: ${start}-${end} of ${sorted.length}`;
   prevPage.disabled = offset === 0;
   nextPage.disabled = offset + state.limit >= sorted.length;
@@ -459,6 +466,81 @@ function isFilterOperator(value: string | undefined): value is FilterOperator {
   return value === 'eq' || value === 'ilike';
 }
 
+function renderSavedViews() {
+  const savedViewSelect = byId<HTMLSelectElement>('savedViewSelect');
+  const applySavedView = byId<HTMLButtonElement>('applySavedView');
+  const deleteSavedView = byId<HTMLButtonElement>('deleteSavedView');
+  const selectedName = savedViewSelect.value;
+  const savedViews = loadSavedViews();
+  savedViewSelect.replaceChildren(
+    ...savedViews.map((view) => {
+      const option = document.createElement('option');
+      option.value = view.name;
+      option.textContent = view.name;
+      return option;
+    }),
+  );
+  if (savedViews.some((view) => view.name === selectedName)) {
+    savedViewSelect.value = selectedName;
+  }
+  const hasViews = savedViews.length > 0;
+  savedViewSelect.disabled = !hasViews;
+  applySavedView.disabled = !hasViews;
+  deleteSavedView.disabled = !hasViews;
+}
+
+function saveCurrentView(name: string) {
+  const normalizedName = name.trim();
+  if (!normalizedName) return;
+  const savedViews = loadSavedViews().filter((view) => view.name !== normalizedName);
+  savedViews.push({
+    name: normalizedName,
+    search: `?${serializeState(state).toString()}`,
+  });
+  savedViews.sort((left, right) => left.name.localeCompare(right.name));
+  localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(savedViews));
+  renderSavedViews();
+}
+
+function applySavedView(name: string) {
+  const savedView = loadSavedViews().find((view) => view.name === name);
+  if (!savedView) return;
+  pendingScrollTop = 0;
+  state = parseStateFromUrl(savedView.search);
+  render();
+  updateUrl('push');
+}
+
+function deleteSavedView(name: string) {
+  const savedViews = loadSavedViews().filter((view) => view.name !== name);
+  localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(savedViews));
+  renderSavedViews();
+}
+
+function loadSavedViews(): SavedView[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVED_VIEWS_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((view) => {
+        if (
+          typeof view?.name !== 'string' ||
+          typeof view?.search !== 'string' ||
+          !view.search.startsWith('?')
+        ) {
+          return null;
+        }
+        return {
+          name: view.name,
+          search: view.search,
+        };
+      })
+      .filter((view): view is SavedView => view !== null);
+  } catch {
+    return [];
+  }
+}
+
 function exportCurrentView(format: 'csv' | 'json') {
   const table = TABLES[state.table];
   const fileBase = `os-ubq-fi-${state.table}-${state.offset + 1}-${state.offset + activePageRows.length}`;
@@ -566,6 +648,11 @@ window.addEventListener('DOMContentLoaded', () => {
   const filterInput = byId<HTMLInputElement>('filterInput');
   const filterOperator = byId<HTMLSelectElement>('filterOperator');
   const addFilter = byId<HTMLButtonElement>('addFilter');
+  const savedViewName = byId<HTMLInputElement>('savedViewName');
+  const savedViewSelect = byId<HTMLSelectElement>('savedViewSelect');
+  const saveCurrentViewButton = byId<HTMLButtonElement>('saveCurrentView');
+  const applySavedViewButton = byId<HTMLButtonElement>('applySavedView');
+  const deleteSavedViewButton = byId<HTMLButtonElement>('deleteSavedView');
   const exportCsv = byId<HTMLButtonElement>('exportCsv');
   const exportJson = byId<HTMLButtonElement>('exportJson');
   const prevPage = byId<HTMLButtonElement>('prevPage');
@@ -610,6 +697,25 @@ window.addEventListener('DOMContentLoaded', () => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     addFilter.click();
+  });
+
+  saveCurrentViewButton.addEventListener('click', () => {
+    saveCurrentView(savedViewName.value);
+    savedViewName.value = '';
+  });
+
+  savedViewName.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    saveCurrentViewButton.click();
+  });
+
+  applySavedViewButton.addEventListener('click', () => {
+    applySavedView(savedViewSelect.value);
+  });
+
+  deleteSavedViewButton.addEventListener('click', () => {
+    deleteSavedView(savedViewSelect.value);
   });
 
   exportCsv.addEventListener('click', () => {
