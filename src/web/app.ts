@@ -9,8 +9,10 @@ type Row = {
   health?: string;
   name: string;
   owner?: string;
+  pluginId?: string;
   repo?: string;
   status: string;
+  userId?: string;
 };
 
 type Column = {
@@ -23,6 +25,20 @@ type FilterOperator = 'eq' | 'ilike';
 type ColumnFilter = {
   key: keyof Row;
   op: FilterOperator;
+  value: string;
+};
+
+type TableConfig = {
+  label: string;
+  columns: Column[];
+  filters: Column[];
+  rows: Row[];
+};
+
+type DrillThroughLink = {
+  filterKey: keyof Row;
+  label: string;
+  table: TableKey;
   value: string;
 };
 
@@ -41,7 +57,7 @@ type ViewState = {
   table: TableKey;
 };
 
-const TABLES: Record<TableKey, { label: string; columns: Column[]; rows: Row[] }> = {
+const TABLES: Record<TableKey, TableConfig> = {
   users: {
     label: 'Users',
     columns: [
@@ -49,6 +65,13 @@ const TABLES: Record<TableKey, { label: string; columns: Column[]; rows: Row[] }
       { key: 'email', label: 'Email' },
       { key: 'status', label: 'Status' },
       { key: 'created', label: 'Created' },
+    ],
+    filters: [
+      { key: 'name', label: 'Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'status', label: 'Status' },
+      { key: 'created', label: 'Created' },
+      { key: 'id', label: 'ID' },
     ],
     rows: makeUsers(),
   },
@@ -60,6 +83,15 @@ const TABLES: Record<TableKey, { label: string; columns: Column[]; rows: Row[] }
       { key: 'status', label: 'Status' },
       { key: 'created', label: 'Created' },
     ],
+    filters: [
+      { key: 'name', label: 'Title' },
+      { key: 'repo', label: 'Repository' },
+      { key: 'status', label: 'Status' },
+      { key: 'created', label: 'Created' },
+      { key: 'id', label: 'ID' },
+      { key: 'userId', label: 'User ID' },
+      { key: 'pluginId', label: 'Plugin ID' },
+    ],
     rows: makeIssues(),
   },
   plugins: {
@@ -69,6 +101,13 @@ const TABLES: Record<TableKey, { label: string; columns: Column[]; rows: Row[] }
       { key: 'owner', label: 'Owner' },
       { key: 'health', label: 'Health' },
       { key: 'created', label: 'Created' },
+    ],
+    filters: [
+      { key: 'name', label: 'Plugin' },
+      { key: 'owner', label: 'Owner' },
+      { key: 'health', label: 'Health' },
+      { key: 'created', label: 'Created' },
+      { key: 'id', label: 'ID' },
     ],
     rows: makePlugins(),
   },
@@ -91,7 +130,9 @@ const FILTER_OPERATORS: Record<FilterOperator, string> = {
   eq: 'equals',
   ilike: 'contains',
 };
+const LAST_TABLE_KEY = 'os.ubq.fi.lastTable';
 const SAVED_VIEWS_KEY = 'os.ubq.fi.savedViews';
+const TABLE_SCROLL_KEY = 'os.ubq.fi.tableScrollTop';
 
 let state = parseStateFromUrl(location.search);
 let activeColumns: Column[] = [];
@@ -110,13 +151,14 @@ function byId<T extends HTMLElement>(id: string): T {
 
 function parseStateFromUrl(search: string): ViewState {
   const params = new URLSearchParams(search);
-  const table = parseTable(params.get('table'));
+  const table = parseTable(params.get('table') ?? loadLastTable());
   const columns = TABLES[table].columns;
+  const filterColumns = getFilterColumns(table);
   const sort = parseColumn(params.get('sort'), columns);
 
   return {
     desc: params.get('desc') === 'true',
-    filters: normalizeFilters(params.get('filters'), columns),
+    filters: normalizeFilters(params.get('filters'), filterColumns),
     limit: parseLimit(params.get('limit')),
     offset: parseNonNegativeInt(params.get('offset'), DEFAULT_STATE.offset),
     rowId: params.get('rowId')?.trim() ?? DEFAULT_STATE.rowId,
@@ -135,6 +177,10 @@ function parseTable(value: string | null): TableKey {
 function parseColumn(value: string | null, columns: Column[]): keyof Row {
   const column = columns.find((item) => item.key === value);
   return column?.key ?? DEFAULT_STATE.sort;
+}
+
+function getFilterColumns(table: TableKey): Column[] {
+  return TABLES[table].filters;
 }
 
 function parseLimit(value: string | null): number {
@@ -206,7 +252,8 @@ function render() {
   const rowDetails = byId<HTMLElement>('rowDetails');
 
   const table = TABLES[state.table];
-  const filtered = filterRows(table.rows, state.filters);
+  const filterColumns = getFilterColumns(state.table);
+  const filtered = filterRowsForTable(state.table, table.rows, state.filters);
   const sorted = sortRows(filtered, state.sort, state.desc);
   const maxOffset = Math.max(
     0,
@@ -225,7 +272,8 @@ function render() {
 
   tableSelect.value = state.table;
   limitSelect.value = String(state.limit);
-  renderFilterControls(table.columns);
+  saveLastTable(state.table);
+  renderFilterControls(filterColumns);
   renderSavedViews();
   scheduleChart(state.table, sorted);
   pageSummary.textContent = `${table.label}: ${start}-${end} of ${sorted.length}`;
@@ -235,13 +283,14 @@ function render() {
   activeColumns = table.columns;
   activePageRows = pageRows;
   activeTotalRows = sorted.length;
-  if (pendingScrollTop !== null) {
-    tableScroll.scrollTop = pendingScrollTop;
-    pendingScrollTop = null;
-  }
 
   tableHead.replaceChildren(renderHeader(table.columns));
   renderVirtualRows(tableBody, table.columns, pageRows, tableScroll);
+  if (pendingScrollTop !== null) {
+    tableScroll.scrollTop = pendingScrollTop;
+    pendingScrollTop = null;
+    renderVirtualRows(tableBody, table.columns, pageRows, tableScroll);
+  }
   rowDetails.replaceChildren(renderDetails(selectedRow));
 }
 
@@ -409,14 +458,108 @@ function renderDetails(row: Row | null): HTMLElement {
 
   const heading = document.createElement('h2');
   heading.textContent = row.name;
+  const relatedLinks = renderDrillThroughLinks(getDrillThroughLinks(state.table, row));
   const pre = document.createElement('pre');
   pre.textContent = JSON.stringify(row, null, 2);
-  wrapper.append(heading, pre);
+  wrapper.append(heading);
+  if (relatedLinks) wrapper.append(relatedLinks);
+  wrapper.append(pre);
   return wrapper;
 }
 
-function filterRows(rows: Row[], query: string): Row[] {
-  const filters = parseFilters(query, TABLES[state.table].columns);
+function renderDrillThroughLinks(links: DrillThroughLink[]): HTMLElement | null {
+  if (links.length === 0) return null;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'related-links';
+
+  for (const link of links) {
+    const button = document.createElement('button');
+    const count = countRowsForLink(link);
+    button.type = 'button';
+    button.className = 'related-chip';
+    button.textContent = `${link.label} ${count}`;
+    button.addEventListener('click', () => navigateDrillThrough(link));
+    wrapper.append(button);
+  }
+
+  return wrapper;
+}
+
+function getDrillThroughLinks(table: TableKey, row: Row): DrillThroughLink[] {
+  if (table === 'users') {
+    return [
+      {
+        filterKey: 'userId',
+        label: 'Assigned issues',
+        table: 'issues',
+        value: row.id,
+      },
+    ];
+  }
+
+  if (table === 'issues') {
+    return [
+      row.userId
+        ? {
+            filterKey: 'id',
+            label: 'Reporter',
+            table: 'users',
+            value: row.userId,
+          }
+        : null,
+      row.pluginId
+        ? {
+            filterKey: 'id',
+            label: 'Plugin',
+            table: 'plugins',
+            value: row.pluginId,
+          }
+        : null,
+      row.repo
+        ? {
+            filterKey: 'repo',
+            label: 'Repository issues',
+            table: 'issues',
+            value: row.repo,
+          }
+        : null,
+    ].filter((link): link is DrillThroughLink => link !== null);
+  }
+
+  return [
+    {
+      filterKey: 'pluginId',
+      label: 'Linked issues',
+      table: 'issues',
+      value: row.id,
+    },
+  ];
+}
+
+function countRowsForLink(link: DrillThroughLink): number {
+  const filters = serializeFilters([{ key: link.filterKey, op: 'eq', value: link.value }]);
+  return filterRowsForTable(link.table, TABLES[link.table].rows, filters).length;
+}
+
+function navigateDrillThrough(link: DrillThroughLink) {
+  const filters = serializeFilters([{ key: link.filterKey, op: 'eq', value: link.value }]);
+  const targetRows = sortRows(
+    filterRowsForTable(link.table, TABLES[link.table].rows, filters),
+    DEFAULT_STATE.sort,
+    DEFAULT_STATE.desc,
+  );
+  setState({
+    desc: DEFAULT_STATE.desc,
+    filters,
+    offset: 0,
+    rowId: targetRows[0]?.id ?? '',
+    sort: DEFAULT_STATE.sort,
+    table: link.table,
+  });
+}
+
+function filterRowsForTable(table: TableKey, rows: Row[], query: string): Row[] {
+  const filters = parseFilters(query, getFilterColumns(table));
   if (filters.length === 0) return rows;
   return rows.filter((row) =>
     filters.every((filter) => {
@@ -624,6 +767,48 @@ function loadSavedViews(): SavedView[] {
   }
 }
 
+function loadLastTable(): TableKey {
+  try {
+    return parseTable(localStorage.getItem(LAST_TABLE_KEY));
+  } catch {
+    return DEFAULT_STATE.table;
+  }
+}
+
+function saveLastTable(table: TableKey) {
+  try {
+    localStorage.setItem(LAST_TABLE_KEY, table);
+  } catch {
+    // URL state remains authoritative when storage is unavailable.
+  }
+}
+
+function loadTableScrollTop(table: TableKey): number {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TABLE_SCROLL_KEY) ?? '{}');
+    const value = parsed?.[table];
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveTableScrollTop(table: TableKey, scrollTop: number) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TABLE_SCROLL_KEY) ?? '{}');
+    const next = typeof parsed === 'object' && parsed !== null ? parsed : {};
+    localStorage.setItem(
+      TABLE_SCROLL_KEY,
+      JSON.stringify({
+        ...next,
+        [table]: Math.max(0, Math.round(scrollTop)),
+      }),
+    );
+  } catch {
+    // Scroll persistence is a convenience layer only.
+  }
+}
+
 function exportCurrentView(format: 'csv' | 'json') {
   const table = TABLES[state.table];
   const fileBase = `os-ubq-fi-${state.table}-${state.offset + 1}-${state.offset + activePageRows.length}`;
@@ -686,7 +871,7 @@ function downloadBlob(contents: string, type: string, filename: string) {
 function makeUsers(): Row[] {
   const statuses = ['active', 'pending', 'suspended'];
   return Array.from({ length: 5000 }, (_, index) => ({
-    id: `usr_${String(index + 1).padStart(4, '0')}`,
+    id: makeRowId('usr', index + 1),
     created: makeDate(index),
     email: `user${index + 1}@ubq.fi`,
     name: `User ${index + 1}`,
@@ -698,11 +883,13 @@ function makeIssues(): Row[] {
   const repos = ['pay.ubq.fi', 'work.ubq.fi', 'os.ubq.fi', 'command-start-stop'];
   const statuses = ['priced', 'assigned', 'review', 'blocked'];
   return Array.from({ length: 5000 }, (_, index) => ({
-    id: `iss_${String(index + 1).padStart(4, '0')}`,
+    id: makeRowId('iss', index + 1),
     created: makeDate(index * 2),
     name: `Issue ${index + 1}: workflow follow-up`,
+    pluginId: makeRowId('plg', ((index * 7) % 5000) + 1),
     repo: repos[index % repos.length] ?? 'os.ubq.fi',
     status: statuses[index % statuses.length] ?? 'priced',
+    userId: makeRowId('usr', (index % 5000) + 1),
   }));
 }
 
@@ -710,13 +897,17 @@ function makePlugins(): Row[] {
   const owners = ['ubiquity-os-marketplace', 'ubiquity', '0x4007'];
   const health = ['healthy', 'warning', 'failing'];
   return Array.from({ length: 5000 }, (_, index) => ({
-    id: `plg_${String(index + 1).padStart(4, '0')}`,
+    id: makeRowId('plg', index + 1),
     created: makeDate(index * 3),
     health: health[index % health.length] ?? 'healthy',
     name: `Plugin ${index + 1}`,
     owner: owners[index % owners.length] ?? 'ubiquity-os-marketplace',
     status: 'monitored',
   }));
+}
+
+function makeRowId(prefix: 'iss' | 'plg' | 'usr', index: number): string {
+  return `${prefix}_${String(index).padStart(4, '0')}`;
 }
 
 function makeDate(offset: number): string {
@@ -760,16 +951,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
   addFilter.addEventListener('click', () => {
     const value = filterInput.value.trim();
-    const table = TABLES[state.table];
-    const key = parseColumn(filterColumn.value, table.columns);
+    const columns = getFilterColumns(state.table);
+    const key = parseColumn(filterColumn.value, columns);
     const op = isFilterOperator(filterOperator.value) ? filterOperator.value : 'ilike';
     if (!value) return;
 
     setState({
-      filters: serializeFilters([
-        ...parseFilters(state.filters, table.columns),
-        { key, op, value },
-      ]),
+      filters: serializeFilters([...parseFilters(state.filters, columns), { key, op, value }]),
       offset: 0,
       rowId: '',
     });
@@ -830,6 +1018,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (scrollFrame) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = 0;
+      saveTableScrollTop(state.table, tableScroll.scrollTop);
       renderVirtualRows(
         byId<HTMLTableSectionElement>('tableBody'),
         activeColumns,
@@ -839,6 +1028,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  pendingScrollTop = loadTableScrollTop(state.table);
   render();
   updateUrl('replace');
 });

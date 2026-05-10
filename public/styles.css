@@ -200,10 +200,20 @@ button {
   font: inherit;
   font-weight: 700;
   padding: 0 12px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 button:hover:not(:disabled) {
   background: var(--primary-hover);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 button:disabled {
@@ -241,6 +251,9 @@ tbody tr:hover {
 
 tbody tr[data-row-id] {
   height: 55px;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .virtual-spacer,
@@ -259,7 +272,8 @@ tbody tr[data-row-id] {
 
 .sort-button,
 .row-toggle,
-.filter-chip {
+.filter-chip,
+.related-chip {
   min-height: 32px;
   color: var(--primary);
   background: transparent;
@@ -268,28 +282,75 @@ tbody tr[data-row-id] {
 
 .sort-button:hover:not(:disabled),
 .row-toggle:hover:not(:disabled),
-.filter-chip:hover:not(:disabled) {
+.filter-chip:hover:not(:disabled),
+.related-chip:hover:not(:disabled) {
   background: transparent;
   color: var(--primary-hover);
   text-decoration: underline;
 }
 
-.filter-chip {
+.filter-chip,
+.related-chip {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: #f8fbff;
   padding: 0 10px;
 }
 
+.filter-chip:hover:not(:disabled),
+.related-chip:hover:not(:disabled) {
+  border-color: #93c5fd;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.08);
+}
+
 .details-panel {
   margin-top: 16px;
   border-radius: 8px;
   padding: 16px;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .details-panel h2 {
   margin-bottom: 10px;
   font-size: 1.05rem;
+}
+
+.related-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.related-chip {
+  color: var(--primary);
+}
+
+.skeleton-row td {
+  height: 55px;
+}
+
+.skeleton-block {
+  display: block;
+  width: min(460px, 70%);
+  height: 16px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef2f7 0%, #dfe7f1 45%, #eef2f7 90%);
+  background-size: 240% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
 }
 
 pre {
@@ -437,5 +498,16 @@ pre {
     border-color: var(--border);
     background: white;
     color: var(--fg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

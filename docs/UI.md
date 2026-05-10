@@ -33,6 +33,26 @@ Changing controls pushes a history entry. Browser back and forward restore the p
 
 Saved views store the current query string in `localStorage` under a user-provided name. Applying a saved view restores the stored URL state and pushes it into browser history. Deleting a saved view removes only that local entry.
 
+Example saved view workflow:
+
+```text
+1. Filter issues to repo equals os.ubq.fi.
+2. Enter "os issues" in View name.
+3. Save the view, switch tables, then apply "os issues" to restore the issue filters.
+```
+
+The app also stores the last selected table and each table's scroll position in `localStorage`. When users return without a table parameter, the last table is restored; when the large table window is opened again, the saved scroll position is reused.
+
+Row details include related chips for drill-through navigation. Clicking a chip switches to the target table, applies an exact FK filter, selects the first matching row, and pushes the new state into browser history so back and forward return to the prior row.
+
+Example drill-through links:
+
+```text
+/?table=issues&offset=0&limit=25&sort=created&desc=false&rowId=iss_0001
+```
+
+From an issue detail, `Reporter` opens the users table with `filters=id.eq.<userId>`, and `Plugin` opens the plugins table with `filters=id.eq.<pluginId>`. From a user or plugin detail, issue chips open the issues table with `filters=userId.eq.<id>` or `filters=pluginId.eq.<id>`.
+
 The chart panel renders lazily from the current filtered rows without extra requests. Users and issues show status totals; plugins show health totals.
 
 Large pages are virtualized. The `5000` row option keeps the same selection and expanded row state while rendering only the visible scroll window.
