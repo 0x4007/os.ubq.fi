@@ -3,39 +3,136 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>os.ubq.fi — Minimal Deno Server</title>
+    <title>os.ubq.fi</title>
+    <script>
+      try {
+        const theme = localStorage.getItem("os.ubq.fi.theme");
+        if (theme === "dark" || theme === "light") {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch {
+        // Storage can be unavailable in restricted browser contexts.
+      }
+    </script>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main>
-      <h1>os.ubq.fi</h1>
-      <p>Minimal Deno server with a simple UI and API.</p>
+      <header class="page-header">
+        <div>
+          <h1>os.ubq.fi</h1>
+          <p>Operational state browser with shareable table views.</p>
+        </div>
+        <button
+          id="themeToggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch theme"
+          aria-pressed="false"
+        >
+          Dark
+        </button>
+      </header>
 
-      <section>
-        <h2>Health</h2>
-        <button id="checkHealth">Check Health</button>
-        <pre id="healthOut">(click to load)</pre>
-      </section>
+      <section class="toolbar" aria-label="Table controls">
+        <label>
+          Table
+          <select id="tableSelect">
+            <option value="users">Users</option>
+            <option value="issues">Issues</option>
+            <option value="plugins">Plugins</option>
+          </select>
+        </label>
 
-      <section>
-        <h2>Time</h2>
-        <button id="getTime">Get Time</button>
-        <pre id="timeOut">(click to load)</pre>
-      </section>
-
-      <section>
-        <h2>Echo</h2>
-        <form id="echoForm">
+        <div class="filter-builder">
           <label>
-            JSON payload
-            <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
+            Column
+            <select id="filterColumn"></select>
           </label>
-          <button type="submit">POST /api/echo</button>
-        </form>
-        <pre id="echoOut">(submit to send)</pre>
+
+          <label>
+            Match
+            <select id="filterOperator">
+              <option value="ilike">Contains</option>
+              <option value="eq">Equals</option>
+            </select>
+          </label>
+
+          <label class="filter-field">
+            Filter
+            <input id="filterInput" type="search" placeholder="Value" />
+          </label>
+
+          <button id="addFilter" type="button">Add</button>
+        </div>
+
+        <label>
+          Rows
+          <select id="limitSelect">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="5000">5000</option>
+          </select>
+        </label>
       </section>
+
+      <div id="filterChips" class="filter-chips" aria-label="Active filters"></div>
+
+      <section class="saved-views" aria-label="Saved views">
+        <label>
+          View name
+          <input id="savedViewName" type="text" placeholder="Name this view" />
+        </label>
+
+        <button id="saveCurrentView" type="button">Save</button>
+
+        <label>
+          Saved
+          <select id="savedViewSelect"></select>
+        </label>
+
+        <button id="applySavedView" type="button">Apply</button>
+        <button id="deleteSavedView" type="button">Delete</button>
+      </section>
+
+      <section id="chartPanel" class="chart-panel" aria-live="polite"></section>
+
+      <section class="table-shell" aria-label="State table">
+        <div class="table-status">
+          <p id="pageSummary" aria-live="polite">Loading rows...</p>
+          <div class="table-actions">
+            <button id="exportCsv" type="button">CSV</button>
+            <button id="exportJson" type="button">JSON</button>
+            <div class="pagination">
+              <button id="prevPage" type="button">Previous</button>
+              <button id="nextPage" type="button">Next</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="tableScroll" class="table-scroll">
+          <table id="dataGrid" role="grid" aria-describedby="pageSummary">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody">
+              <tr class="skeleton-row" aria-hidden="true">
+                <td colspan="5"><span class="skeleton-block skeleton-wide"></span></td>
+              </tr>
+              <tr class="skeleton-row" aria-hidden="true">
+                <td colspan="5"><span class="skeleton-block skeleton-medium"></span></td>
+              </tr>
+              <tr class="skeleton-row" aria-hidden="true">
+                <td colspan="5"><span class="skeleton-block skeleton-short"></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside id="rowDetails" role="region" aria-label="Row details" aria-live="polite"></aside>
     </main>
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
