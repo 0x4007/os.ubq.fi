@@ -57,6 +57,10 @@ Relation chips prefer exact edges from `/api/sb/relations?table=<table>&id=<rowI
 
 The grid and inspector render skeleton placeholders while loading. Empty filters use muted row messaging, and relation fetch failures are shown inline without blocking the row details payload.
 
+## Accessibility and Keyboard
+
+The table exposes a grid role with row and column counts, sortable headers publish `aria-sort`, and row toggles control the details region. Row focus is visible in the table: Tab reaches rows and row actions, Arrow Up/Down moves through the current page, Home/End jump to page edges, and Enter or Space opens or closes the focused row details while preserving focus.
+
 The chart panel renders lazily from the current filtered rows without extra requests. Users and issues show status totals; plugins show health totals.
 
 Large pages are virtualized. The `5000` row option keeps the same selection and expanded row state while rendering only the visible scroll window.

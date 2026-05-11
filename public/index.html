@@ -82,7 +82,7 @@
 
       <section class="table-shell" aria-label="State table">
         <div class="table-status">
-          <p id="pageSummary">Loading rows...</p>
+          <p id="pageSummary" aria-live="polite">Loading rows...</p>
           <div class="table-actions">
             <button id="exportCsv" type="button">CSV</button>
             <button id="exportJson" type="button">JSON</button>
@@ -94,7 +94,7 @@
         </div>
 
         <div id="tableScroll" class="table-scroll">
-          <table>
+          <table id="dataGrid" role="grid" aria-describedby="pageSummary">
             <thead id="tableHead"></thead>
             <tbody id="tableBody">
               <tr class="skeleton-row" aria-hidden="true">
@@ -111,7 +111,7 @@
         </div>
       </section>
 
-      <aside id="rowDetails" aria-live="polite"></aside>
+      <aside id="rowDetails" role="region" aria-label="Row details" aria-live="polite"></aside>
     </main>
 
     <script type="module" defer src="/assets/app.js"></script>

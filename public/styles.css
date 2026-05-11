@@ -256,6 +256,12 @@ tbody tr[data-row-id] {
     box-shadow 160ms ease;
 }
 
+tbody tr[data-row-id]:focus-visible {
+  outline: 3px solid #bfdbfe;
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
 .virtual-spacer,
 .virtual-spacer:hover {
   background: transparent;

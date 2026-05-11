@@ -137,6 +137,7 @@ const FILTER_OPERATORS: Record<FilterOperator, string> = {
   eq: 'equals',
   ilike: 'contains',
 };
+const DETAILS_REGION_ID = 'rowDetails';
 const LAST_TABLE_KEY = 'os.ubq.fi.lastTable';
 const SAVED_VIEWS_KEY = 'os.ubq.fi.savedViews';
 const TABLE_SCROLL_KEY = 'os.ubq.fi.tableScrollTop';
@@ -148,6 +149,7 @@ let activeTotalRows = 0;
 let chartFrame = 0;
 let gridStatus: 'loading' | 'ready' = 'loading';
 let pendingChart: { rows: Row[]; table: TableKey } | null = null;
+let pendingFocusRowId: string | null = null;
 let pendingScrollTop: number | null = null;
 let relationAbortController: AbortController | null = null;
 let relationState: RelationState = {
@@ -268,6 +270,7 @@ function render() {
 
   const table = TABLES[state.table];
   const filterColumns = getFilterColumns(state.table);
+  const dataGrid = byId<HTMLTableElement>('dataGrid');
   const filtered = filterRowsForTable(state.table, table.rows, state.filters);
   const sorted = sortRows(filtered, state.sort, state.desc);
   const maxOffset = Math.max(
@@ -289,6 +292,8 @@ function render() {
   tableSelect.value = state.table;
   limitSelect.value = String(state.limit);
   saveLastTable(state.table);
+  dataGrid.setAttribute('aria-rowcount', String(sorted.length));
+  dataGrid.setAttribute('aria-colcount', String(table.columns.length + 1));
   renderFilterControls(filterColumns);
   renderSavedViews();
 
@@ -373,6 +378,7 @@ function renderVirtualRows(
   rows: Row[],
   scrollEl: HTMLElement,
 ) {
+  const rowToRefocus = pendingFocusRowId ?? getFocusedRowId();
   if (rows.length === 0) {
     tableBody.replaceChildren(renderEmptyRow(columns.length + 1));
     return;
@@ -396,6 +402,10 @@ function renderVirtualRows(
     ...visibleRows,
     renderSpacerRow(bottomHeight, columns.length + 1),
   );
+  if (rowToRefocus) {
+    pendingFocusRowId = rowToRefocus;
+    requestAnimationFrame(flushPendingRowFocus);
+  }
 }
 
 function renderTableSkeletonRows(tableBody: HTMLTableSectionElement, colSpan: number) {
@@ -456,10 +466,13 @@ function renderHeader(columns: Column[]): HTMLTableRowElement {
     const th = document.createElement('th');
     const button = document.createElement('button');
     const isActive = state.sort === column.key;
+    const nextDirection = isActive && !state.desc ? 'descending' : 'ascending';
+    th.scope = 'col';
+    th.setAttribute('aria-sort', isActive ? (state.desc ? 'descending' : 'ascending') : 'none');
     button.type = 'button';
     button.className = 'sort-button';
     button.textContent = `${column.label}${isActive ? (state.desc ? ' ↓' : ' ↑') : ''}`;
-    button.setAttribute('aria-sort', isActive ? (state.desc ? 'descending' : 'ascending') : 'none');
+    button.setAttribute('aria-label', `Sort ${column.label} ${nextDirection}`);
     button.addEventListener('click', () => {
       setState({
         desc: isActive ? !state.desc : false,
@@ -472,6 +485,7 @@ function renderHeader(columns: Column[]): HTMLTableRowElement {
   }
 
   const th = document.createElement('th');
+  th.scope = 'col';
   th.textContent = 'Details';
   tr.append(th);
   return tr;
@@ -479,8 +493,14 @@ function renderHeader(columns: Column[]): HTMLTableRowElement {
 
 function renderRow(row: Row, columns: Column[]): HTMLTableRowElement {
   const tr = document.createElement('tr');
+  const isSelected = row.id === state.rowId;
   tr.dataset.rowId = row.id;
-  if (row.id === state.rowId) {
+  tr.tabIndex = 0;
+  tr.setAttribute('aria-controls', DETAILS_REGION_ID);
+  tr.setAttribute('aria-label', getRowAriaLabel(row, isSelected));
+  tr.setAttribute('aria-selected', String(isSelected));
+  tr.addEventListener('keydown', (event) => handleRowKeydown(event, row.id));
+  if (isSelected) {
     tr.classList.add('selected-row');
   }
 
@@ -494,14 +514,110 @@ function renderRow(row: Row, columns: Column[]): HTMLTableRowElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'row-toggle';
-  button.textContent = row.id === state.rowId ? 'Close' : 'Open';
-  button.setAttribute('aria-expanded', String(row.id === state.rowId));
+  button.textContent = isSelected ? 'Close' : 'Open';
+  button.setAttribute('aria-controls', DETAILS_REGION_ID);
+  button.setAttribute('aria-expanded', String(isSelected));
+  button.setAttribute('aria-label', `${isSelected ? 'Close' : 'Open'} details for ${row.name}`);
   button.addEventListener('click', () => {
-    setState({ rowId: state.rowId === row.id ? '' : row.id });
+    toggleRowDetails(row.id);
   });
   action.append(button);
   tr.append(action);
   return tr;
+}
+
+function getRowAriaLabel(row: Row, isSelected: boolean): string {
+  const detailsState = isSelected ? 'Details are open.' : 'Details are closed.';
+  return `${row.name}, ${row.status}, ${row.id}. ${detailsState} Press Enter to ${
+    isSelected ? 'close' : 'open'
+  } details.`;
+}
+
+function handleRowKeydown(event: KeyboardEvent, rowId: string) {
+  if (event.target !== event.currentTarget) return;
+
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    toggleRowDetails(rowId);
+    return;
+  }
+
+  if (
+    event.key === 'ArrowDown' ||
+    event.key === 'ArrowUp' ||
+    event.key === 'End' ||
+    event.key === 'Home'
+  ) {
+    event.preventDefault();
+    moveRowFocus(rowId, event.key);
+  }
+}
+
+function toggleRowDetails(rowId: string) {
+  pendingFocusRowId = rowId;
+  setState({ rowId: state.rowId === rowId ? '' : rowId });
+}
+
+function moveRowFocus(rowId: string, key: 'ArrowDown' | 'ArrowUp' | 'End' | 'Home') {
+  const currentIndex = activePageRows.findIndex((row) => row.id === rowId);
+  if (currentIndex < 0 || activePageRows.length === 0) return;
+
+  const targetIndex =
+    key === 'Home'
+      ? 0
+      : key === 'End'
+        ? activePageRows.length - 1
+        : key === 'ArrowDown'
+          ? Math.min(activePageRows.length - 1, currentIndex + 1)
+          : Math.max(0, currentIndex - 1);
+  const target = activePageRows[targetIndex];
+  if (!target) return;
+
+  const tableScroll = byId<HTMLDivElement>('tableScroll');
+  pendingFocusRowId = target.id;
+  ensurePageRowVisible(targetIndex, tableScroll);
+  renderVirtualRows(
+    byId<HTMLTableSectionElement>('tableBody'),
+    activeColumns,
+    activePageRows,
+    tableScroll,
+  );
+}
+
+function ensurePageRowVisible(index: number, scrollEl: HTMLElement) {
+  const rowTop = index * ROW_HEIGHT;
+  const rowBottom = rowTop + ROW_HEIGHT;
+  const viewportTop = scrollEl.scrollTop;
+  const viewportBottom = viewportTop + scrollEl.clientHeight;
+
+  if (rowTop < viewportTop) {
+    scrollEl.scrollTop = rowTop;
+  } else if (rowBottom > viewportBottom) {
+    scrollEl.scrollTop = Math.max(0, rowBottom - scrollEl.clientHeight);
+  }
+}
+
+function flushPendingRowFocus() {
+  if (!pendingFocusRowId) return;
+  const row = getRenderedRowElement(pendingFocusRowId);
+  if (!row) return;
+  row.focus({ preventScroll: true });
+  row.scrollIntoView({ block: 'nearest' });
+  pendingFocusRowId = null;
+}
+
+function getRenderedRowElement(rowId: string): HTMLTableRowElement | null {
+  return (
+    [...document.querySelectorAll<HTMLTableRowElement>('tbody tr[data-row-id]')].find(
+      (row) => row.dataset.rowId === rowId,
+    ) ?? null
+  );
+}
+
+function getFocusedRowId(): string | null {
+  if (!(document.activeElement instanceof HTMLElement)) return null;
+  if (document.activeElement.tagName !== 'TR') return null;
+  return document.activeElement.dataset.rowId ?? null;
 }
 
 function renderDetails(row: Row | null): HTMLElement {
@@ -525,6 +641,8 @@ function renderDetails(row: Row | null): HTMLElement {
   const relatedLinks =
     relations.status === 'loading' ? null : renderDrillThroughLinks(relations.links);
   const pre = document.createElement('pre');
+  pre.tabIndex = 0;
+  pre.setAttribute('aria-label', `JSON payload for ${row.name}`);
   pre.textContent = JSON.stringify(row, null, 2);
   wrapper.append(heading);
   if (relations.status === 'loading') {
@@ -687,6 +805,7 @@ function renderDrillThroughLinks(links: DrillThroughLink[]): HTMLElement | null 
   if (links.length === 0) return null;
   const wrapper = document.createElement('div');
   wrapper.className = 'related-links';
+  wrapper.setAttribute('aria-label', 'Related rows');
 
   for (const link of links) {
     const button = document.createElement('button');
@@ -694,6 +813,7 @@ function renderDrillThroughLinks(links: DrillThroughLink[]): HTMLElement | null 
     button.type = 'button';
     button.className = 'related-chip';
     button.textContent = `${link.label} ${count}`;
+    button.setAttribute('aria-label', `${link.label}: ${count} matching rows`);
     button.addEventListener('click', () => navigateDrillThrough(link));
     wrapper.append(button);
   }
