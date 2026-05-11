@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>os.ubq.fi</title>
+    <script>
+      try {
+        const theme = localStorage.getItem("os.ubq.fi.theme");
+        if (theme === "dark" || theme === "light") {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch {
+        // Storage can be unavailable in restricted browser contexts.
+      }
+    </script>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -13,6 +23,15 @@
           <h1>os.ubq.fi</h1>
           <p>Operational state browser with shareable table views.</p>
         </div>
+        <button
+          id="themeToggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch theme"
+          aria-pressed="false"
+        >
+          Dark
+        </button>
       </header>
 
       <section class="toolbar" aria-label="Table controls">

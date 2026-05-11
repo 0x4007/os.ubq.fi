@@ -43,6 +43,8 @@ Example saved view workflow:
 
 The app also stores the last selected table and each table's scroll position in `localStorage`. When users return without a table parameter, the last table is restored; when the large table window is opened again, the saved scroll position is reused.
 
+The theme toggle switches between light and dark UI tokens and stores the choice in `localStorage` as `os.ubq.fi.theme`. The root document receives `data-theme="light"` or `data-theme="dark"` before the app initializes so reloads keep the selected color mode.
+
 Row details include related chips for drill-through navigation. Clicking a chip switches to the target table, applies an exact FK filter, selects the first matching row, and pushes the new state into browser history so back and forward return to the prior row.
 
 Example drill-through links:

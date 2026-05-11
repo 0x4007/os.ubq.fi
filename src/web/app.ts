@@ -22,6 +22,8 @@ type Column = {
 
 type FilterOperator = 'eq' | 'ilike';
 
+type Theme = 'dark' | 'light';
+
 type ColumnFilter = {
   key: keyof Row;
   op: FilterOperator;
@@ -141,6 +143,7 @@ const DETAILS_REGION_ID = 'rowDetails';
 const LAST_TABLE_KEY = 'os.ubq.fi.lastTable';
 const SAVED_VIEWS_KEY = 'os.ubq.fi.savedViews';
 const TABLE_SCROLL_KEY = 'os.ubq.fi.tableScrollTop';
+const THEME_KEY = 'os.ubq.fi.theme';
 
 let state = parseStateFromUrl(location.search);
 let activeColumns: Column[] = [];
@@ -164,6 +167,48 @@ function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
+}
+
+function initTheme() {
+  const themeToggle = byId<HTMLButtonElement>('themeToggle');
+  applyTheme(loadTheme(), themeToggle);
+  themeToggle.addEventListener('click', () => {
+    const nextTheme = getCurrentTheme() === 'light' ? 'dark' : 'light';
+    saveTheme(nextTheme);
+    applyTheme(nextTheme, themeToggle);
+  });
+}
+
+function getCurrentTheme(): Theme {
+  return parseTheme(document.documentElement.dataset.theme);
+}
+
+function loadTheme(): Theme {
+  try {
+    return parseTheme(localStorage.getItem(THEME_KEY));
+  } catch {
+    return 'light';
+  }
+}
+
+function saveTheme(theme: Theme) {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // Theme still applies for the current page even when storage is unavailable.
+  }
+}
+
+function parseTheme(value: string | null | undefined): Theme {
+  return value === 'dark' || value === 'light' ? value : 'light';
+}
+
+function applyTheme(theme: Theme, themeToggle = byId<HTMLButtonElement>('themeToggle')) {
+  const nextTheme = theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = theme;
+  themeToggle.textContent = nextTheme === 'dark' ? 'Dark' : 'Light';
+  themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+  themeToggle.setAttribute('aria-pressed', String(theme === 'dark'));
 }
 
 function parseStateFromUrl(search: string): ViewState {
@@ -1252,6 +1297,8 @@ function makeDate(offset: number): string {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+
   const tableSelect = byId<HTMLSelectElement>('tableSelect');
   const limitSelect = byId<HTMLSelectElement>('limitSelect');
   const filterColumn = byId<HTMLSelectElement>('filterColumn');
