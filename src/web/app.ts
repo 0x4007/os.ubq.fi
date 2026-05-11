@@ -42,6 +42,13 @@ type DrillThroughLink = {
   value: string;
 };
 
+type RelationState = {
+  key: string;
+  links: DrillThroughLink[];
+  message: string;
+  status: 'error' | 'idle' | 'loading' | 'ready';
+};
+
 type SavedView = {
   name: string;
   search: string;
@@ -139,8 +146,16 @@ let activeColumns: Column[] = [];
 let activePageRows: Row[] = [];
 let activeTotalRows = 0;
 let chartFrame = 0;
+let gridStatus: 'loading' | 'ready' = 'loading';
 let pendingChart: { rows: Row[]; table: TableKey } | null = null;
 let pendingScrollTop: number | null = null;
+let relationAbortController: AbortController | null = null;
+let relationState: RelationState = {
+  key: '',
+  links: [],
+  message: '',
+  status: 'idle',
+};
 let scrollFrame = 0;
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -269,22 +284,32 @@ function render() {
   const selectedRow = sorted.find((row) => row.id === state.rowId) ?? null;
   const start = sorted.length === 0 ? 0 : offset + 1;
   const end = Math.min(offset + state.limit, sorted.length);
+  syncRelationState(state.table, selectedRow);
 
   tableSelect.value = state.table;
   limitSelect.value = String(state.limit);
   saveLastTable(state.table);
   renderFilterControls(filterColumns);
   renderSavedViews();
-  scheduleChart(state.table, sorted);
-  pageSummary.textContent = `${table.label}: ${start}-${end} of ${sorted.length}`;
-  prevPage.disabled = offset === 0;
-  nextPage.disabled = offset + state.limit >= sorted.length;
 
   activeColumns = table.columns;
   activePageRows = pageRows;
   activeTotalRows = sorted.length;
 
   tableHead.replaceChildren(renderHeader(table.columns));
+  if (gridStatus === 'loading') {
+    pageSummary.textContent = `${table.label}: loading rows`;
+    prevPage.disabled = true;
+    nextPage.disabled = true;
+    renderTableSkeletonRows(tableBody, table.columns.length + 1);
+    rowDetails.replaceChildren(renderDetails(selectedRow));
+    return;
+  }
+
+  scheduleChart(state.table, sorted);
+  pageSummary.textContent = `${table.label}: ${start}-${end} of ${sorted.length}`;
+  prevPage.disabled = offset === 0;
+  nextPage.disabled = offset + state.limit >= sorted.length;
   renderVirtualRows(tableBody, table.columns, pageRows, tableScroll);
   if (pendingScrollTop !== null) {
     tableScroll.scrollTop = pendingScrollTop;
@@ -373,11 +398,43 @@ function renderVirtualRows(
   );
 }
 
+function renderTableSkeletonRows(tableBody: HTMLTableSectionElement, colSpan: number) {
+  tableBody.replaceChildren(
+    renderSkeletonRow(colSpan, 'wide'),
+    renderSkeletonRow(colSpan, 'medium'),
+    renderSkeletonRow(colSpan, 'short'),
+    renderSkeletonRow(colSpan, 'wide'),
+  );
+}
+
+function renderSkeletonRow(
+  colSpan: number,
+  size: 'medium' | 'short' | 'wide',
+): HTMLTableRowElement {
+  const tr = document.createElement('tr');
+  tr.className = 'skeleton-row';
+  tr.setAttribute('aria-hidden', 'true');
+  const td = document.createElement('td');
+  td.colSpan = colSpan;
+  const block = document.createElement('span');
+  block.className = `skeleton-block skeleton-${size}`;
+  td.append(block);
+  tr.append(td);
+  return tr;
+}
+
 function renderEmptyRow(colSpan: number): HTMLTableRowElement {
   const tr = document.createElement('tr');
   const td = document.createElement('td');
   td.colSpan = colSpan;
-  td.textContent = 'No matching rows';
+  const empty = document.createElement('div');
+  empty.className = 'empty-state';
+  const title = document.createElement('strong');
+  title.textContent = 'No matching rows';
+  const detail = document.createElement('span');
+  detail.textContent = 'Clear filters or broaden the current search.';
+  empty.append(title, detail);
+  td.append(empty);
   tr.append(td);
   return tr;
 }
@@ -451,20 +508,179 @@ function renderDetails(row: Row | null): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'details-panel';
   if (!row) {
-    wrapper.textContent =
-      'Select a row to inspect its state. The selected row is reflected in rowId=.';
+    const empty = document.createElement('div');
+    empty.className = 'empty-state inspector-empty';
+    const title = document.createElement('strong');
+    title.textContent = 'No row selected';
+    const detail = document.createElement('span');
+    detail.textContent = 'Open a table row to inspect its state and relations.';
+    empty.append(title, detail);
+    wrapper.append(empty);
     return wrapper;
   }
 
   const heading = document.createElement('h2');
   heading.textContent = row.name;
-  const relatedLinks = renderDrillThroughLinks(getDrillThroughLinks(state.table, row));
+  const relations = getRelationStateForRow(state.table, row);
+  const relatedLinks =
+    relations.status === 'loading' ? null : renderDrillThroughLinks(relations.links);
   const pre = document.createElement('pre');
   pre.textContent = JSON.stringify(row, null, 2);
   wrapper.append(heading);
+  if (relations.status === 'loading') {
+    wrapper.append(renderInspectorSkeleton());
+  } else if (relations.status === 'error') {
+    wrapper.append(renderInlineError(relations.message));
+  }
   if (relatedLinks) wrapper.append(relatedLinks);
   wrapper.append(pre);
   return wrapper;
+}
+
+function renderInspectorSkeleton(): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'inspector-skeleton';
+  wrapper.setAttribute('aria-hidden', 'true');
+  for (const size of ['short', 'medium', 'wide'] as const) {
+    const block = document.createElement('span');
+    block.className = `skeleton-block skeleton-${size}`;
+    wrapper.append(block);
+  }
+  return wrapper;
+}
+
+function renderInlineError(message: string): HTMLElement {
+  const banner = document.createElement('div');
+  banner.className = 'inline-error';
+  banner.textContent = message;
+  return banner;
+}
+
+function getRelationStateForRow(table: TableKey, row: Row): RelationState {
+  const key = relationKey(table, row.id);
+  if (relationState.key === key) {
+    return relationState;
+  }
+  return {
+    key,
+    links: getFallbackDrillThroughLinks(table, row),
+    message: '',
+    status: 'loading',
+  };
+}
+
+function syncRelationState(table: TableKey, row: Row | null) {
+  if (!row) {
+    relationAbortController?.abort();
+    relationAbortController = null;
+    relationState = { key: '', links: [], message: '', status: 'idle' };
+    return;
+  }
+
+  const key = relationKey(table, row.id);
+  if (relationState.key === key && relationState.status !== 'idle') return;
+
+  relationAbortController?.abort();
+  const fallbackLinks = getFallbackDrillThroughLinks(table, row);
+  relationState = {
+    key,
+    links: fallbackLinks,
+    message: '',
+    status: 'loading',
+  };
+
+  const controller = new AbortController();
+  relationAbortController = controller;
+  fetchExactRelations(table, row.id, controller.signal)
+    .then((links) => {
+      if (controller.signal.aborted || !isCurrentRelationKey(key)) return;
+      relationState = {
+        key,
+        links: links.length > 0 ? links : fallbackLinks,
+        message: '',
+        status: 'ready',
+      };
+      render();
+    })
+    .catch((error: unknown) => {
+      if (controller.signal.aborted || !isCurrentRelationKey(key)) return;
+      relationState = {
+        key,
+        links: fallbackLinks,
+        message:
+          error instanceof Error && error.message
+            ? `Exact relations unavailable: ${error.message}`
+            : 'Exact relations unavailable. Showing generated links.',
+        status: 'error',
+      };
+      render();
+    });
+}
+
+async function fetchExactRelations(
+  table: TableKey,
+  rowId: string,
+  signal: AbortSignal,
+): Promise<DrillThroughLink[]> {
+  const params = new URLSearchParams({ id: rowId, table });
+  const response = await fetch(`/api/sb/relations?${params.toString()}`, { signal });
+  if (!response.ok) {
+    throw new Error(`RPC returned ${response.status}`);
+  }
+  return parseRelationPayload(await response.json());
+}
+
+function parseRelationPayload(payload: unknown): DrillThroughLink[] {
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !Array.isArray((payload as { edges?: unknown }).edges)
+  ) {
+    return [];
+  }
+
+  return (payload as { edges: unknown[] }).edges
+    .map((edge) => parseRelationEdge(edge))
+    .filter((edge): edge is DrillThroughLink => edge !== null);
+}
+
+function parseRelationEdge(edge: unknown): DrillThroughLink | null {
+  if (!edge || typeof edge !== 'object') return null;
+  const item = edge as Partial<Record<keyof DrillThroughLink, unknown>>;
+  const table = item.table;
+  if (
+    typeof item.filterKey !== 'string' ||
+    typeof item.label !== 'string' ||
+    typeof table !== 'string' ||
+    typeof item.value !== 'string' ||
+    !isTableKey(table)
+  ) {
+    return null;
+  }
+
+  const filterKey = item.filterKey as keyof Row;
+  if (!getFilterColumns(table).some((column) => column.key === filterKey)) {
+    return null;
+  }
+
+  return {
+    filterKey,
+    label: item.label,
+    table,
+    value: item.value,
+  };
+}
+
+function relationKey(table: TableKey, rowId: string): string {
+  return `${table}:${rowId}`;
+}
+
+function isCurrentRelationKey(key: string): boolean {
+  return relationKey(state.table, state.rowId) === key;
+}
+
+function isTableKey(value: string): value is TableKey {
+  return value === 'issues' || value === 'plugins' || value === 'users';
 }
 
 function renderDrillThroughLinks(links: DrillThroughLink[]): HTMLElement | null {
@@ -485,7 +701,7 @@ function renderDrillThroughLinks(links: DrillThroughLink[]): HTMLElement | null 
   return wrapper;
 }
 
-function getDrillThroughLinks(table: TableKey, row: Row): DrillThroughLink[] {
+function getFallbackDrillThroughLinks(table: TableKey, row: Row): DrillThroughLink[] {
   if (table === 'users') {
     return [
       {
@@ -1030,7 +1246,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   pendingScrollTop = loadTableScrollTop(state.table);
   render();
-  updateUrl('replace');
+  requestAnimationFrame(() => {
+    gridStatus = 'ready';
+    render();
+    updateUrl('replace');
+  });
 });
 
 function shouldResetVirtualScroll(previous: ViewState, next: ViewState): boolean {

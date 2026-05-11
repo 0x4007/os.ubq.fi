@@ -328,6 +328,43 @@ tbody tr[data-row-id] {
   color: var(--primary);
 }
 
+.empty-state {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 22px 12px;
+  color: var(--muted);
+  text-align: center;
+  white-space: normal;
+}
+
+.empty-state strong {
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.inspector-empty {
+  min-height: 86px;
+  align-content: center;
+}
+
+.inline-error {
+  margin: 0 0 12px;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.inspector-skeleton {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
 .skeleton-row td {
   height: 55px;
 }
@@ -341,6 +378,18 @@ tbody tr[data-row-id] {
   background: linear-gradient(90deg, #eef2f7 0%, #dfe7f1 45%, #eef2f7 90%);
   background-size: 240% 100%;
   animation: shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-wide {
+  width: min(460px, 70%);
+}
+
+.skeleton-medium {
+  width: min(320px, 56%);
+}
+
+.skeleton-short {
+  width: min(220px, 42%);
 }
 
 @keyframes shimmer {

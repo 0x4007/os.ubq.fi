@@ -53,6 +53,10 @@ Example drill-through links:
 
 From an issue detail, `Reporter` opens the users table with `filters=id.eq.<userId>`, and `Plugin` opens the plugins table with `filters=id.eq.<pluginId>`. From a user or plugin detail, issue chips open the issues table with `filters=userId.eq.<id>` or `filters=pluginId.eq.<id>`.
 
+Relation chips prefer exact edges from `/api/sb/relations?table=<table>&id=<rowId>`. If the endpoint is unavailable or returns an error, the inspector shows an inline warning and falls back to locally generated FK filters with the same labels.
+
+The grid and inspector render skeleton placeholders while loading. Empty filters use muted row messaging, and relation fetch failures are shown inline without blocking the row details payload.
+
 The chart panel renders lazily from the current filtered rows without extra requests. Users and issues show status totals; plugins show health totals.
 
 Large pages are virtualized. The `5000` row option keeps the same selection and expanded row state while rendering only the visible scroll window.

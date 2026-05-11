@@ -32,6 +32,47 @@ Deno.test('POST /api/echo returns same JSON', async () => {
   assertEquals(data.echoed.hello, 'world');
 });
 
+Deno.test('GET /api/sb/relations returns exact issue edges', async () => {
+  const res = await handler(
+    new Request('http://localhost/api/sb/relations?table=issues&id=iss_0002'),
+  );
+  assertEquals(res.status, 200);
+  const data = await res.json();
+  assertEquals(data.source, 'exact-fk-rpc');
+  assertEquals(data.edges, [
+    {
+      filterKey: 'id',
+      label: 'Reporter',
+      table: 'users',
+      value: 'usr_0002',
+    },
+    {
+      filterKey: 'id',
+      label: 'Plugin',
+      table: 'plugins',
+      value: 'plg_0008',
+    },
+    {
+      filterKey: 'repo',
+      label: 'Repository issues',
+      table: 'issues',
+      value: 'work.ubq.fi',
+    },
+  ]);
+});
+
+Deno.test('GET /api/sb/relations validates query params', async () => {
+  const badTable = await handler(
+    new Request('http://localhost/api/sb/relations?table=unknown&id=iss_0001'),
+  );
+  assertEquals(badTable.status, 400);
+
+  const badId = await handler(
+    new Request('http://localhost/api/sb/relations?table=issues&id=missing'),
+  );
+  assertEquals(badId.status, 404);
+});
+
 Deno.test('GET / serves index.html', async () => {
   const res = await handler(new Request('http://localhost/'));
   assertEquals(res.status, 200);
