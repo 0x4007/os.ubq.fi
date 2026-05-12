@@ -12,8 +12,55 @@ async function fetchJSON(path: string, options: RequestInit = {}): Promise<Fetch
   return { ok: res.ok, status: res.status, data };
 }
 
+function setOutputState(el: HTMLElement, state: 'empty' | 'error' | 'loading' | 'ready') {
+  el.classList.remove('output-empty', 'output-error', 'output-loading', 'output-ready');
+  el.classList.add(`output-${state}`);
+}
+
+function isEmptyData(value: unknown) {
+  if (value == null || value === '') return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+}
+
 function show(el: HTMLElement, value: unknown) {
+  setOutputState(el, 'ready');
   el.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+}
+
+function showEmpty(el: HTMLElement, message: string) {
+  setOutputState(el, 'empty');
+  el.textContent = message;
+}
+
+function showError(el: HTMLElement, message: string, details?: unknown) {
+  setOutputState(el, 'error');
+  el.textContent = details ? `${message}\n\n${JSON.stringify(details, null, 2)}` : message;
+}
+
+function showLoading(el: HTMLElement, label: string) {
+  setOutputState(el, 'loading');
+  el.innerHTML = `
+    <span class="skeleton-line skeleton-line--short"></span>
+    <span class="skeleton-line"></span>
+    <span class="skeleton-line"></span>
+    <span class="sr-only">${label}</span>
+  `;
+}
+
+function showResponse(el: HTMLElement, res: FetchJSONResult, emptyMessage: string) {
+  if (!res.ok) {
+    showError(el, `Request failed with status ${res.status}`, res.data);
+    return;
+  }
+
+  if (isEmptyData(res.data)) {
+    showEmpty(el, emptyMessage);
+    return;
+  }
+
+  show(el, res);
 }
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -32,13 +79,23 @@ window.addEventListener('DOMContentLoaded', () => {
   const echoOut = byId<HTMLPreElement>('echoOut');
 
   healthBtn.addEventListener('click', async () => {
-    const res = await fetchJSON('/api/health');
-    show(healthOut, res);
+    showLoading(healthOut, 'Loading health status');
+    try {
+      const res = await fetchJSON('/api/health');
+      showResponse(healthOut, res, 'No health status returned.');
+    } catch (err) {
+      showError(healthOut, 'Unable to load health status.', String(err));
+    }
   });
 
   timeBtn.addEventListener('click', async () => {
-    const res = await fetchJSON('/api/time');
-    show(timeOut, res);
+    showLoading(timeOut, 'Loading server time');
+    try {
+      const res = await fetchJSON('/api/time');
+      showResponse(timeOut, res, 'No time data returned.');
+    } catch (err) {
+      showError(timeOut, 'Unable to load server time.', String(err));
+    }
   });
 
   echoForm.addEventListener('submit', async (e) => {
@@ -47,14 +104,20 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       JSON.parse(bodyText);
     } catch (err) {
-      show(echoOut, { error: 'Invalid JSON', details: String(err) });
+      showError(echoOut, 'Invalid JSON payload.', String(err));
       return;
     }
-    const res = await fetchJSON('/api/echo', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: bodyText,
-    });
-    show(echoOut, res);
+
+    showLoading(echoOut, 'Sending echo request');
+    try {
+      const res = await fetchJSON('/api/echo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: bodyText,
+      });
+      showResponse(echoOut, res, 'No echo payload returned.');
+    } catch (err) {
+      showError(echoOut, 'Unable to send echo request.', String(err));
+    }
   });
 });
