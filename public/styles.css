@@ -30,3 +30,62 @@ pre {
 textarea { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #333; color: inherit; background: transparent; }
 label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 
+@media print {
+  :root {
+    --bg: #fff;
+    --fg: #111;
+    --muted: #444;
+  }
+
+  html,
+  body {
+    height: auto;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 11pt;
+  }
+
+  main {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  button,
+  form,
+  textarea,
+  label {
+    display: none !important;
+  }
+
+  section {
+    break-inside: avoid;
+    border: 0;
+    border-radius: 0;
+    border-top: 1px solid #999;
+    margin: 0 0 1rem;
+    padding: 0.75rem 0 0;
+  }
+
+  h1,
+  h2 {
+    break-after: avoid;
+    color: #000;
+  }
+
+  pre {
+    break-inside: avoid;
+    max-height: none;
+    overflow: visible;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    color: #111;
+    padding: 0;
+  }
+}
