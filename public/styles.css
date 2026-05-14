@@ -30,3 +30,108 @@ pre {
 textarea { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #333; color: inherit; background: transparent; }
 label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 
+@media print {
+  @page {
+    margin: 0.6in;
+  }
+
+  :root {
+    color-scheme: light;
+    --bg: #fff;
+    --fg: #111;
+    --muted: #444;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    height: auto;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+
+  main {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  h1,
+  h2 {
+    color: #000;
+    page-break-after: avoid;
+  }
+
+  p,
+  label,
+  pre {
+    color: #111;
+  }
+
+  section,
+  pre {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  section {
+    border-color: #bbb;
+    border-radius: 0;
+    margin: 0 0 0.35in;
+    padding: 0 0 0.25in;
+  }
+
+  section + section {
+    border-top: 1px solid #ddd;
+    padding-top: 0.25in;
+  }
+
+  pre {
+    max-height: none;
+    overflow: visible;
+    background: #fff !important;
+    border: 1px solid #bbb;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  button,
+  textarea {
+    display: none !important;
+  }
+
+  nav,
+  header,
+  footer,
+  aside,
+  .app-chrome,
+  .chrome,
+  .sidebar,
+  .toolbar,
+  .actions,
+  .filters,
+  .grid-controls {
+    display: none !important;
+  }
+
+  .inspector,
+  [data-inspector] {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    grid-column: 1 / -1 !important;
+  }
+}
