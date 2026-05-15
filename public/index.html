@@ -14,13 +14,15 @@
       <section>
         <h2>Health</h2>
         <button id="checkHealth">Check Health</button>
-        <pre id="healthOut">(click to load)</pre>
+        <pre id="healthOut" class="output-empty">
+No health status loaded yet.</pre
+        >
       </section>
 
       <section>
         <h2>Time</h2>
         <button id="getTime">Get Time</button>
-        <pre id="timeOut">(click to load)</pre>
+        <pre id="timeOut" class="output-empty">No server time loaded yet.</pre>
       </section>
 
       <section>
@@ -28,14 +30,20 @@
         <form id="echoForm">
           <label>
             JSON payload
-            <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
+            <textarea
+              id="echoInput"
+              rows="4"
+              placeholder='{"hello":"world"}'
+            ></textarea>
           </label>
           <button type="submit">POST /api/echo</button>
         </form>
-        <pre id="echoOut">(submit to send)</pre>
+        <pre id="echoOut" class="output-empty">
+No echo response submitted yet.</pre
+        >
       </section>
     </main>
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
