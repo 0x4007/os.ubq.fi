@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>os.ubq.fi — Minimal Deno Server</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -21,6 +22,50 @@
         <h2>Time</h2>
         <button id="getTime">Get Time</button>
         <pre id="timeOut">(click to load)</pre>
+      </section>
+
+      <section>
+        <h2>Issues</h2>
+        <div class="table-shell">
+          <table aria-label="Issues">
+            <thead>
+              <tr>
+                <th>
+                  <button type="button" class="sort-header" data-sort="id">ID <span aria-hidden="true"></span></button>
+                </th>
+                <th>
+                  <button type="button" class="sort-header" data-sort="title">
+                    Title <span aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="sort-header" data-sort="status">
+                    Status <span aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="sort-header" data-sort="created">
+                    Created <span aria-hidden="true"></span>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="issueRows">
+              <tr>
+                <td colspan="4">Loading rows...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <aside class="issue-inspector" aria-live="polite">
+          <h3>Selected issue</h3>
+          <dl id="issueInspector">
+            <div>
+              <dt>Status</dt>
+              <dd>Select a row or open a URL with <code>rowId</code>.</dd>
+            </div>
+          </dl>
+        </aside>
       </section>
 
       <section>
