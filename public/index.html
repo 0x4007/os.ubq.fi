@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>os.ubq.fi — Minimal Deno Server</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -24,6 +25,22 @@
       </section>
 
       <section>
+        <h2>Current view</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">Title</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody id="currentViewBody"></tbody>
+        </table>
+        <button id="exportJSON">Export JSON</button>
+        <pre id="exportJSONOut">(export preview)</pre>
+      </section>
+
+      <section>
         <h2>Echo</h2>
         <form id="echoForm">
           <label>
@@ -38,4 +55,4 @@
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
