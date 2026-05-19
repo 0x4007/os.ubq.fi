@@ -1,7 +1,41 @@
-import { serveDir } from '@std/http/file-server';
-
 const PUBLIC_DIR = Deno.env.get('PUBLIC_DIR') ?? 'public';
 const PORT = Number.parseInt(Deno.env.get('PORT') ?? '8000');
+
+type IssueRow = {
+  id: string;
+  title: string;
+  status: string;
+  created: string;
+};
+
+const ISSUE_ROWS: IssueRow[] = [
+  {
+    id: 'iss_0001',
+    title: 'Sorting header state',
+    status: 'open',
+    created: '2026-01-12',
+  },
+  {
+    id: 'iss_0002',
+    title: 'Plugin health monitor',
+    status: 'assigned',
+    created: '2026-02-04',
+  },
+  {
+    id: 'iss_0003',
+    title: 'Dynamic sitemap refresh',
+    status: 'open',
+    created: '2026-03-18',
+  },
+  {
+    id: 'iss_0004',
+    title: 'Contributor reward proof',
+    status: 'done',
+    created: '2026-04-02',
+  },
+];
+
+const ISSUE_SORT_FIELDS = new Set<keyof IssueRow>(['id', 'title', 'status', 'created']);
 
 export async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -18,6 +52,10 @@ export async function handler(req: Request): Promise<Response> {
       if (pathname === '/api/time' && req.method === 'GET') {
         const now = new Date();
         return json({ iso: now.toISOString(), epochMS: now.getTime() });
+      }
+
+      if (pathname === '/api/sb/rows' && req.method === 'GET') {
+        return rows(url.searchParams);
       }
 
       if (pathname === '/api/echo' && req.method === 'POST') {
@@ -50,12 +88,8 @@ export async function handler(req: Request): Promise<Response> {
       return notFound();
     }
 
-    // Static file serving for everything else
-    return await serveDir(req, {
-      fsRoot: PUBLIC_DIR,
-      showIndex: true,
-      quiet: true,
-    });
+    // Static file serving for everything else.
+    return await serveStatic(pathname);
   } catch (err) {
     console.error('Request error:', err);
     return new Response('Internal Server Error', { status: 500 });
@@ -70,8 +104,52 @@ function json(data: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(data), { ...init, headers });
 }
 
+function rows(params: URLSearchParams): Response {
+  const table = params.get('table') ?? 'issues';
+  if (table !== 'issues') {
+    return json({ error: `Unsupported table "${table}"` }, { status: 400 });
+  }
+
+  const requestedSort = params.get('sort') ?? 'id';
+  const sort = ISSUE_SORT_FIELDS.has(requestedSort as keyof IssueRow)
+    ? (requestedSort as keyof IssueRow)
+    : 'id';
+  const desc = params.get('desc') === 'true';
+  const rows = [...ISSUE_ROWS].sort((left, right) => {
+    const order = left[sort].localeCompare(right[sort]);
+    return desc ? -order : order;
+  });
+
+  return json({ table, sort, desc, rows });
+}
+
 function notFound(): Response {
   return new Response('Not Found', { status: 404 });
+}
+
+async function serveStatic(pathname: string): Promise<Response> {
+  const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
+  if (relativePath.includes('..')) {
+    return notFound();
+  }
+
+  try {
+    const file = await Deno.readFile(`${PUBLIC_DIR}/${relativePath}`);
+    return new Response(file, {
+      headers: { 'content-type': contentType(relativePath) },
+    });
+  } catch {
+    return notFound();
+  }
+}
+
+function contentType(path: string): string {
+  if (path.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (path.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (path.endsWith('.js')) return 'text/javascript; charset=utf-8';
+  if (path.endsWith('.json')) return 'application/json; charset=utf-8';
+  if (path.endsWith('.svg')) return 'image/svg+xml';
+  return 'application/octet-stream';
 }
 
 if (import.meta.main) {
