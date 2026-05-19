@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>os.ubq.fi — Minimal Deno Server</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -24,6 +25,23 @@
       </section>
 
       <section>
+        <h2>Relations</h2>
+        <form id="relationsForm" class="inline-form">
+          <label>
+            Table
+            <input id="relationsTable" value="issues" autocomplete="off" />
+          </label>
+          <label>
+            Row ID
+            <input id="relationsId" value="iss_0002" autocomplete="off" />
+          </label>
+          <button type="submit">GET /api/sb/relations</button>
+        </form>
+        <div id="relationsList" class="relation-list" aria-live="polite"></div>
+        <pre id="relationsOut">(submit to inspect)</pre>
+      </section>
+
+      <section>
         <h2>Echo</h2>
         <form id="echoForm">
           <label>
@@ -38,4 +56,4 @@
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
