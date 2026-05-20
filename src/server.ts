@@ -3,6 +3,62 @@ import { serveDir } from '@std/http/file-server';
 const PUBLIC_DIR = Deno.env.get('PUBLIC_DIR') ?? 'public';
 const PORT = Number.parseInt(Deno.env.get('PORT') ?? '8000');
 
+type FilterOperator = 'eq' | 'ilike';
+
+type IssueRow = {
+  id: string;
+  title: string;
+  repo: string;
+  status: string;
+  created: string;
+};
+
+type AppliedFilter = {
+  column: keyof IssueRow;
+  op: FilterOperator;
+  value: string;
+};
+
+const ISSUE_ROWS: IssueRow[] = [
+  {
+    id: 'iss_1001',
+    title: 'Price label sync stalls after invoice creation',
+    repo: 'pay.ubq.fi',
+    status: 'open',
+    created: '2026-01-12',
+  },
+  {
+    id: 'iss_1002',
+    title: 'Worker startup retries hide plugin failures',
+    repo: 'os.ubq.fi',
+    status: 'review',
+    created: '2026-02-08',
+  },
+  {
+    id: 'iss_1003',
+    title: 'Command runner drops repository filter state',
+    repo: 'command-start-stop',
+    status: 'open',
+    created: '2026-03-03',
+  },
+  {
+    id: 'iss_1004',
+    title: 'Contributor reward proof export',
+    repo: 'work.ubq.fi',
+    status: 'done',
+    created: '2026-03-28',
+  },
+  {
+    id: 'iss_1005',
+    title: 'Plugin registry health card is stale',
+    repo: 'os.ubq.fi',
+    status: 'blocked',
+    created: '2026-04-16',
+  },
+];
+
+const ISSUE_FILTER_COLUMNS = new Set<keyof IssueRow>(['id', 'title', 'repo', 'status', 'created']);
+
 export async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const pathname = url.pathname;
@@ -18,6 +74,10 @@ export async function handler(req: Request): Promise<Response> {
       if (pathname === '/api/time' && req.method === 'GET') {
         const now = new Date();
         return json({ iso: now.toISOString(), epochMS: now.getTime() });
+      }
+
+      if (pathname === '/api/sb/rows' && req.method === 'GET') {
+        return rows(url.searchParams);
       }
 
       if (pathname === '/api/echo' && req.method === 'POST') {
@@ -60,6 +120,57 @@ export async function handler(req: Request): Promise<Response> {
     console.error('Request error:', err);
     return new Response('Internal Server Error', { status: 500 });
   }
+}
+
+function rows(params: URLSearchParams): Response {
+  const table = params.get('table') ?? 'issues';
+  if (table !== 'issues') {
+    return json({ error: `Unsupported table "${table}"` }, { status: 400 });
+  }
+
+  const filters = parseIssueFilters(params);
+  const rows = ISSUE_ROWS.filter((row) => matchesFilters(row, filters));
+  return json({ table, filters, rows });
+}
+
+function parseIssueFilters(params: URLSearchParams): AppliedFilter[] {
+  const filters: AppliedFilter[] = [];
+
+  for (const column of ISSUE_FILTER_COLUMNS) {
+    const raw = params.get(column);
+    if (!raw) continue;
+
+    const filter = parsePostgrestFilter(column, raw);
+    if (filter) {
+      filters.push(filter);
+    }
+  }
+
+  return filters;
+}
+
+function parsePostgrestFilter(column: keyof IssueRow, raw: string): AppliedFilter | null {
+  const separatorIndex = raw.indexOf('.');
+  if (separatorIndex <= 0) return null;
+
+  const op = raw.slice(0, separatorIndex);
+  const value = raw.slice(separatorIndex + 1).trim();
+  if ((op !== 'eq' && op !== 'ilike') || !value) return null;
+
+  return {
+    column,
+    op,
+    value: op === 'ilike' ? value.replace(/^\*|\*$/g, '') : value,
+  };
+}
+
+function matchesFilters(row: IssueRow, filters: AppliedFilter[]): boolean {
+  return filters.every((filter) => {
+    const actual = String(row[filter.column] ?? '').toLowerCase();
+    const expected = filter.value.toLowerCase();
+
+    return filter.op === 'eq' ? actual === expected : actual.includes(expected);
+  });
 }
 
 function json(data: unknown, init: ResponseInit = {}): Response {

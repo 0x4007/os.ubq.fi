@@ -18,6 +18,50 @@ Deno.test('GET /api/time returns iso timestamp', async () => {
   assertEquals(typeof data.epochMS, 'number');
 });
 
+Deno.test('GET /api/sb/rows filters issues with PostgREST eq operator', async () => {
+  const res = await handler(
+    new Request('http://localhost/api/sb/rows?table=issues&status=eq.open'),
+  );
+  assertEquals(res.status, 200);
+  const data = await res.json();
+  assertEquals(data.rows.length, 2);
+  assertEquals(data.filters, [{ column: 'status', op: 'eq', value: 'open' }]);
+  assertEquals(
+    data.rows.every((row: { status: string }) => row.status === 'open'),
+    true,
+  );
+});
+
+Deno.test('GET /api/sb/rows filters issues with PostgREST ilike operator', async () => {
+  const res = await handler(
+    new Request('http://localhost/api/sb/rows?table=issues&title=ilike.*plugin*'),
+  );
+  assertEquals(res.status, 200);
+  const data = await res.json();
+  assertEquals(data.rows.length, 2);
+  assertEquals(
+    data.rows.every((row: { title: string }) => /plugin/i.test(row.title)),
+    true,
+  );
+});
+
+Deno.test('GET /api/sb/rows combines column filters', async () => {
+  const res = await handler(
+    new Request('http://localhost/api/sb/rows?table=issues&repo=eq.os.ubq.fi&status=eq.blocked'),
+  );
+  assertEquals(res.status, 200);
+  const data = await res.json();
+  assertEquals(
+    data.rows.map((row: { id: string }) => row.id),
+    ['iss_1005'],
+  );
+});
+
+Deno.test('GET /api/sb/rows rejects unsupported tables', async () => {
+  const res = await handler(new Request('http://localhost/api/sb/rows?table=users'));
+  assertEquals(res.status, 400);
+});
+
 Deno.test('POST /api/echo returns same JSON', async () => {
   const payload = { hello: 'world' };
   const res = await handler(
