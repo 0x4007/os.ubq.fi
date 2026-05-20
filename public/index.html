@@ -4,10 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>os.ubq.fi — Minimal Deno Server</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content" tabindex="-1">
       <h1>os.ubq.fi</h1>
       <p>Minimal Deno server with a simple UI and API.</p>
 
@@ -21,6 +23,63 @@
         <h2>Time</h2>
         <button id="getTime">Get Time</button>
         <pre id="timeOut">(click to load)</pre>
+      </section>
+
+      <section aria-labelledby="issuesHeading">
+        <h2 id="issuesHeading">Issues</h2>
+        <p id="issueTableHelp" class="sr-only">
+          Tab to the issues grid, use arrow keys to move between rows, and press Enter or Space to
+          show or hide issue details.
+        </p>
+        <div class="table-shell">
+          <table aria-label="Issues" aria-describedby="issueTableHelp" role="grid">
+            <thead>
+              <tr>
+                <th aria-sort="none">
+                  <button type="button" class="sort-header" data-sort="id">
+                    ID <span aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="sort-header" data-sort="title">
+                    Title <span aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="sort-header" data-sort="status">
+                    Status <span aria-hidden="true"></span>
+                  </button>
+                </th>
+                <th aria-sort="none">
+                  <button type="button" class="sort-header" data-sort="created">
+                    Created <span aria-hidden="true"></span>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="issueRows">
+              <tr>
+                <td colspan="4">Loading rows...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <aside
+          id="issueInspectorPanel"
+          class="issue-inspector"
+          role="region"
+          aria-labelledby="issueInspectorTitle"
+          aria-live="polite"
+          tabindex="-1"
+        >
+          <h3 id="issueInspectorTitle">Selected issue</h3>
+          <dl id="issueInspector">
+            <div>
+              <dt>Status</dt>
+              <dd>Select a row or open a URL with <code>rowId</code>.</dd>
+            </div>
+          </dl>
+        </aside>
       </section>
 
       <section>
@@ -38,4 +97,4 @@
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
