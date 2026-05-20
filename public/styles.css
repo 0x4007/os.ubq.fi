@@ -27,6 +27,64 @@ pre {
   background: #0f1115; border: 1px solid #1b1f2a; padding: 0.75rem; border-radius: 6px;
   overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-word;
 }
-textarea { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #333; color: inherit; background: transparent; }
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #333;
+  color: inherit;
+  background: transparent;
+}
 label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
+.filter-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 2rem;
+  margin: 0.75rem 0;
+}
+.filter-chip {
+  background: #163a25;
+  border: 1px solid #2d7a4e;
+  color: #c9f4d9;
+}
+.issues-status {
+  margin: 0.5rem 0;
+  color: var(--muted);
+}
+.table-wrap {
+  overflow: auto;
+  border: 1px solid #222;
+  border-radius: 6px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 620px;
+}
+th, td {
+  padding: 0.6rem;
+  border-bottom: 1px solid #222;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
 
+@media (max-width: 720px) {
+  .filter-form {
+    grid-template-columns: 1fr;
+  }
+}
