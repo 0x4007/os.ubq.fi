@@ -4,6 +4,8 @@
   --fg: #e6e8ea;
   --accent: #7cd7ff;
   --muted: #9aa4af;
+  --panel: #11141a;
+  --line: #242a35;
 }
 
 * { box-sizing: border-box; }
@@ -30,3 +32,71 @@ pre {
 textarea { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #333; color: inherit; background: transparent; }
 label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 
+.virtual-status {
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.virtual-viewport {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  height: 420px;
+  overflow: auto;
+  position: relative;
+}
+
+.virtual-list {
+  min-width: 48rem;
+}
+
+.virtual-row {
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(14rem, 1.6fr) minmax(7rem, 0.8fr) minmax(6rem, 0.7fr) minmax(4rem, 0.45fr) minmax(7rem, 0.7fr) 6rem;
+  height: 44px;
+}
+
+.virtual-row.is-selected {
+  background: #13233a;
+}
+
+.virtual-cell,
+.virtual-expand {
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--line);
+  color: inherit;
+  display: flex;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 0 0.65rem;
+  text-align: left;
+}
+
+.virtual-title {
+  background: transparent;
+  color: var(--fg);
+  font-weight: 650;
+  justify-content: flex-start;
+}
+
+.virtual-title:hover,
+.virtual-expand:hover {
+  background: #172236;
+  filter: none;
+}
+
+.virtual-expand {
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+  justify-content: center;
+}
+
+.virtual-expand[aria-expanded="true"] {
+  background: #10251d;
+  color: #8df0b6;
+}
