@@ -7,34 +7,44 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
-      <h1>os.ubq.fi</h1>
-      <p>Minimal Deno server with a simple UI and API.</p>
+    <div class="app-shell">
+      <aside id="sidebar" class="sidebar" aria-label="Tables">
+        <h1>os.ubq.fi</h1>
+        <nav class="table-nav" aria-label="Table list">
+          <button type="button" data-table-button="health">Health</button>
+          <button type="button" data-table-button="time">Time</button>
+          <button type="button" data-table-button="echo">Echo</button>
+        </nav>
+      </aside>
 
-      <section>
-        <h2>Health</h2>
-        <button id="checkHealth">Check Health</button>
-        <pre id="healthOut">(click to load)</pre>
-      </section>
+      <main>
+        <p>Minimal Deno server with a simple UI and API.</p>
 
-      <section>
-        <h2>Time</h2>
-        <button id="getTime">Get Time</button>
-        <pre id="timeOut">(click to load)</pre>
-      </section>
+        <section id="panel-health" data-table-panel="health">
+          <h2>Health</h2>
+          <button id="checkHealth">Check Health</button>
+          <pre id="healthOut">(click to load)</pre>
+        </section>
 
-      <section>
-        <h2>Echo</h2>
-        <form id="echoForm">
-          <label>
-            JSON payload
-            <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
-          </label>
-          <button type="submit">POST /api/echo</button>
-        </form>
-        <pre id="echoOut">(submit to send)</pre>
-      </section>
-    </main>
+        <section id="panel-time" data-table-panel="time" hidden>
+          <h2>Time</h2>
+          <button id="getTime">Get Time</button>
+          <pre id="timeOut">(click to load)</pre>
+        </section>
+
+        <section id="panel-echo" data-table-panel="echo" hidden>
+          <h2>Echo</h2>
+          <form id="echoForm">
+            <label>
+              JSON payload
+              <textarea id="echoInput" rows="4" placeholder='{"hello":"world"}'></textarea>
+            </label>
+            <button type="submit">POST /api/echo</button>
+          </form>
+          <pre id="echoOut">(submit to send)</pre>
+        </section>
+      </main>
+    </div>
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
