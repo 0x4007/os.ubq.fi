@@ -11,6 +11,25 @@
       <h1>os.ubq.fi</h1>
       <p>Minimal Deno server with a simple UI and API.</p>
 
+      <section aria-labelledby="savedViewsHeading">
+        <h2 id="savedViewsHeading">Saved Views</h2>
+        <form id="savedViewForm" class="saved-view-form">
+          <label>
+            View name
+            <input
+              id="savedViewName"
+              type="text"
+              maxlength="80"
+              autocomplete="off"
+              placeholder="Production health"
+            />
+          </label>
+          <button type="submit">Save Current URL</button>
+        </form>
+        <ul id="savedViewsList" class="saved-view-list" aria-label="Saved views"></ul>
+        <p id="savedViewsStatus" class="saved-view-status" aria-live="polite"></p>
+      </section>
+
       <section>
         <h2>Health</h2>
         <button id="checkHealth">Check Health</button>
