@@ -16,6 +16,49 @@ function show(el: HTMLElement, value: unknown) {
   el.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
+function isEmptyValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+}
+
+function setPanelState(
+  el: HTMLElement,
+  state: 'empty' | 'error' | 'loading' | 'ready',
+  value?: unknown,
+) {
+  el.className = `output output--${state}`;
+  el.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+
+  if (state === 'loading') {
+    el.textContent = 'Loading...';
+    return;
+  }
+
+  if (state === 'empty') {
+    el.textContent = 'No data to display yet.';
+    return;
+  }
+
+  show(el, value);
+}
+
+async function loadPanel(el: HTMLElement, path: string, options: RequestInit = {}) {
+  setPanelState(el, 'loading');
+  try {
+    const res = await fetchJSON(path, options);
+    if (!res.ok) {
+      setPanelState(el, 'error', { error: 'Request failed', status: res.status, details: res.data });
+      return;
+    }
+    setPanelState(el, isEmptyValue(res.data) ? 'empty' : 'ready', res);
+  } catch (err) {
+    setPanelState(el, 'error', { error: 'Network request failed', details: String(err) });
+  }
+}
+
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing element #${id}`);
@@ -31,14 +74,16 @@ window.addEventListener('DOMContentLoaded', () => {
   const echoInput = byId<HTMLTextAreaElement>('echoInput');
   const echoOut = byId<HTMLPreElement>('echoOut');
 
+  setPanelState(healthOut, 'empty');
+  setPanelState(timeOut, 'empty');
+  setPanelState(echoOut, 'empty');
+
   healthBtn.addEventListener('click', async () => {
-    const res = await fetchJSON('/api/health');
-    show(healthOut, res);
+    await loadPanel(healthOut, '/api/health');
   });
 
   timeBtn.addEventListener('click', async () => {
-    const res = await fetchJSON('/api/time');
-    show(timeOut, res);
+    await loadPanel(timeOut, '/api/time');
   });
 
   echoForm.addEventListener('submit', async (e) => {
@@ -47,14 +92,13 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       JSON.parse(bodyText);
     } catch (err) {
-      show(echoOut, { error: 'Invalid JSON', details: String(err) });
+      setPanelState(echoOut, 'error', { error: 'Invalid JSON', details: String(err) });
       return;
     }
-    const res = await fetchJSON('/api/echo', {
+    await loadPanel(echoOut, '/api/echo', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: bodyText,
     });
-    show(echoOut, res);
   });
 });
