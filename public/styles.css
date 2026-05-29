@@ -4,6 +4,7 @@
   --fg: #e6e8ea;
   --accent: #7cd7ff;
   --muted: #9aa4af;
+  --danger: #ff8a8a;
 }
 
 * { box-sizing: border-box; }
@@ -30,3 +31,48 @@ pre {
 textarea { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #333; color: inherit; background: transparent; }
 label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 
+.output {
+  min-height: 4.5rem;
+}
+
+.output--empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.output--error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, #1b1f2a);
+  background: color-mix(in srgb, var(--danger) 12%, #0f1115);
+}
+
+.output--loading {
+  position: relative;
+  color: transparent;
+  overflow: hidden;
+}
+
+.output--loading::before,
+.output--loading::after {
+  content: "";
+  display: block;
+  height: 0.8rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #202632 25%, #303949 37%, #202632 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.2s ease-in-out infinite;
+}
+
+.output--loading::before {
+  width: 75%;
+  margin-bottom: 0.6rem;
+}
+
+.output--loading::after {
+  width: 45%;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
