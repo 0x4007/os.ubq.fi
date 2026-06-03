@@ -14,13 +14,21 @@
       <section>
         <h2>Health</h2>
         <button id="checkHealth">Check Health</button>
-        <pre id="healthOut">(click to load)</pre>
+        <div id="healthState" class="state-panel is-empty" aria-live="polite">
+          <strong>No health check yet</strong>
+          <span>Run the request to load the latest API health response.</span>
+        </div>
+        <pre id="healthOut" hidden></pre>
       </section>
 
       <section>
         <h2>Time</h2>
         <button id="getTime">Get Time</button>
-        <pre id="timeOut">(click to load)</pre>
+        <div id="timeState" class="state-panel is-empty" aria-live="polite">
+          <strong>No time response yet</strong>
+          <span>Request the server time to populate this panel.</span>
+        </div>
+        <pre id="timeOut" hidden></pre>
       </section>
 
       <section>
@@ -32,7 +40,11 @@
           </label>
           <button type="submit">POST /api/echo</button>
         </form>
-        <pre id="echoOut">(submit to send)</pre>
+        <div id="echoState" class="state-panel is-empty" aria-live="polite">
+          <strong>No echo response yet</strong>
+          <span>Submit a JSON payload to see the echoed response.</span>
+        </div>
+        <pre id="echoOut" hidden></pre>
       </section>
     </main>
 
