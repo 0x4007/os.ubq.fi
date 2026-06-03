@@ -3,6 +3,19 @@ import { serveDir } from '@std/http/file-server';
 const PUBLIC_DIR = Deno.env.get('PUBLIC_DIR') ?? 'public';
 const PORT = Number.parseInt(Deno.env.get('PORT') ?? '8000');
 
+type SortKey = 'service' | 'status' | 'latencyMS' | 'updatedAt';
+type SortOrder = 'asc' | 'desc';
+type SBRow = { service: string; status: string; latencyMS: number; updatedAt: string };
+
+const SORT_KEYS: SortKey[] = ['service', 'status', 'latencyMS', 'updatedAt'];
+const DEFAULT_SORT_KEY: SortKey = 'service';
+const DEFAULT_SORT_ORDER: SortOrder = 'asc';
+const SB_ROWS: SBRow[] = [
+  { service: 'api', status: 'ok', latencyMS: 34, updatedAt: '2026-06-03T02:10:00.000Z' },
+  { service: 'worker', status: 'queued', latencyMS: 88, updatedAt: '2026-06-03T02:13:00.000Z' },
+  { service: 'web', status: 'ok', latencyMS: 21, updatedAt: '2026-06-03T02:11:00.000Z' },
+];
+
 export async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const pathname = url.pathname;
@@ -18,6 +31,12 @@ export async function handler(req: Request): Promise<Response> {
       if (pathname === '/api/time' && req.method === 'GET') {
         const now = new Date();
         return json({ iso: now.toISOString(), epochMS: now.getTime() });
+      }
+
+      if (pathname === '/api/sb/rows' && req.method === 'GET') {
+        const sort = readSortKey(url.searchParams.get('sort'));
+        const order = readSortOrder(url.searchParams.get('order'));
+        return json({ sort, order, rows: sortRows(SB_ROWS, sort, order) });
       }
 
       if (pathname === '/api/echo' && req.method === 'POST') {
@@ -60,6 +79,26 @@ export async function handler(req: Request): Promise<Response> {
     console.error('Request error:', err);
     return new Response('Internal Server Error', { status: 500 });
   }
+}
+
+function readSortKey(value: string | null): SortKey {
+  return SORT_KEYS.includes(value as SortKey) ? (value as SortKey) : DEFAULT_SORT_KEY;
+}
+
+function readSortOrder(value: string | null): SortOrder {
+  return value === 'desc' ? 'desc' : DEFAULT_SORT_ORDER;
+}
+
+export function sortRows(rows: SBRow[], sort: SortKey, order: SortOrder): SBRow[] {
+  const direction = order === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const aValue = a[sort];
+    const bValue = b[sort];
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return (aValue - bValue) * direction;
+    }
+    return String(aValue).localeCompare(String(bValue)) * direction;
+  });
 }
 
 function json(data: unknown, init: ResponseInit = {}): Response {
