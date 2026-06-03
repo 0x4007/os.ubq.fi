@@ -4,6 +4,11 @@
   --fg: #e6e8ea;
   --accent: #7cd7ff;
   --muted: #9aa4af;
+  --panel: #0f1115;
+  --panel-border: #1b1f2a;
+  --error: #ff8a8a;
+  --error-bg: #2a1418;
+  --error-border: #6f2a33;
 }
 
 * { box-sizing: border-box; }
@@ -24,9 +29,69 @@ button {
 }
 button:hover { filter: brightness(1.05); }
 pre {
-  background: #0f1115; border: 1px solid #1b1f2a; padding: 0.75rem; border-radius: 6px;
+  background: var(--panel); border: 1px solid var(--panel-border); padding: 0.75rem; border-radius: 6px;
   overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-word;
 }
+pre[hidden] { display: none; }
 textarea { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #333; color: inherit; background: transparent; }
 label { display: block; margin-bottom: 0.5rem; color: var(--muted); }
 
+.state-panel {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  min-height: 5.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.state-panel[hidden] { display: none; }
+.state-panel strong { color: var(--fg); }
+.state-panel span { display: block; }
+
+.state-panel.is-loading {
+  color: var(--fg);
+}
+
+.state-panel.is-error {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+  color: var(--fg);
+}
+
+.state-panel.is-error strong {
+  color: var(--error);
+}
+
+.retry-button {
+  justify-self: start;
+  margin-top: 0.35rem;
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--fg);
+}
+
+.skeleton-stack {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.skeleton-line {
+  height: 0.75rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1b1f2a 0%, #2d3442 45%, #1b1f2a 90%);
+  background-size: 220% 100%;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton-line:nth-child(2) { width: 82%; }
+.skeleton-line:nth-child(3) { width: 58%; }
+
+@keyframes skeleton-pulse {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
