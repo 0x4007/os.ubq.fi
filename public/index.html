@@ -24,6 +24,41 @@
       </section>
 
       <section>
+        <h2>View State</h2>
+        <form id="viewStateForm" class="state-grid">
+          <label>
+            Table
+            <input id="tableInput" name="table" value="users" />
+          </label>
+          <label>
+            Offset
+            <input id="offsetInput" name="offset" inputmode="numeric" value="0" />
+          </label>
+          <label>
+            Limit
+            <input id="limitInput" name="limit" inputmode="numeric" value="25" />
+          </label>
+          <label>
+            Sort
+            <input id="sortInput" name="sort" value="created" />
+          </label>
+          <label>
+            Desc
+            <input id="descInput" name="desc" type="checkbox" />
+          </label>
+          <label>
+            Filters
+            <input id="filtersInput" name="filters" placeholder="status:active" />
+          </label>
+          <label>
+            Row ID
+            <input id="rowIdInput" name="rowId" />
+          </label>
+        </form>
+        <pre id="viewStateOut"></pre>
+      </section>
+
+      <section>
         <h2>Echo</h2>
         <form id="echoForm">
           <label>
