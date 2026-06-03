@@ -18,6 +18,18 @@ Deno.test('GET /api/time returns iso timestamp', async () => {
   assertEquals(typeof data.epochMS, 'number');
 });
 
+Deno.test('GET /api/sb/rows sorts rows by query parameters', async () => {
+  const res = await handler(new Request('http://localhost/api/sb/rows?sort=latencyMS&order=desc'));
+  assertEquals(res.status, 200);
+  const data = await res.json();
+  assertEquals(data.sort, 'latencyMS');
+  assertEquals(data.order, 'desc');
+  assertEquals(
+    data.rows.map((row: { latencyMS: number }) => row.latencyMS),
+    [88, 34, 21],
+  );
+});
+
 Deno.test('POST /api/echo returns same JSON', async () => {
   const payload = { hello: 'world' };
   const res = await handler(
