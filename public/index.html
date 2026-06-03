@@ -8,8 +8,15 @@
   </head>
   <body>
     <main>
-      <h1>os.ubq.fi</h1>
-      <p>Minimal Deno server with a simple UI and API.</p>
+      <header class="app-header">
+        <div>
+          <h1>os.ubq.fi</h1>
+          <p>Minimal Deno server with a simple UI and API.</p>
+        </div>
+        <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false">
+          Light theme
+        </button>
+      </header>
 
       <section>
         <h2>Health</h2>
@@ -38,4 +45,4 @@
 
     <script type="module" defer src="/assets/app.js"></script>
   </body>
-  </html>
+</html>
